@@ -68,7 +68,7 @@ function policyFor(c: C, user: User, repo: Repo): GitPolicy {
     };
   }
   return {
-    beforeFetch: () => beforeFetch(c.env, c.executionCtx, user, repo),
+    beforeFetch: ({ clone }) => beforeFetch(c.env, c.executionCtx, user, repo, { clone }),
     beforePush: () => beforePush(c.env, user, repo),
     reviewPush: (analyses) => reviewPush(c.env, c.executionCtx, user, repo, analyses),
   };

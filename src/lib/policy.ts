@@ -55,11 +55,16 @@ export async function gitAuthenticate(env: Env, request: Request): Promise<User 
 
 /**
  * Called before upload-pack sends a pack (clone, fetch, pull) — not for the ref advertisement.
- * Needs an approved pull request on the repo; consumes it and charges the execution fee.
+ * A fresh clone (no haves) needs no request, only the clone fee. Every fetch and pull after that
+ * needs an approved pull request on the repo; it is consumed and the execution fee charged.
  * The message is shown by git as `remote: …` / `fatal: …`.
  */
-export async function beforeFetch(env: Env, _ctx: Waiter, user: User, repo: Repo): Promise<Verdict> {
+export async function beforeFetch(env: Env, _ctx: Waiter, user: User, repo: Repo, opts: { clone: boolean } = { clone: false }): Promise<Verdict> {
   if (user.frozen) return frozen;
+  if (opts.clone) {
+    await chargeFee(env, user, 'clone', `${repo.owner}/${repo.name}`);
+    return { ok: true };
+  }
   if (!await consumeApproved(env, user, repo, 'pull'))
     return { ok: false, message: `You need an approved pull request to pull from ${repo.owner}/${repo.name}. File one at ${site}${repoUrl(repo)}/requests/pull` };
   await chargeFee(env, user, 'pull_execute', `${repo.owner}/${repo.name}`);

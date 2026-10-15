@@ -34,7 +34,7 @@ export const firstLine = (message: string) => message.split('\n', 1)[0];
 
 /** Clone URL with a Copy button and the pull request fee beside it. */
 export function cloneBox(url: string) {
-  return html`<div class="clone-box"><span class="clone-label">HTTPS</span><input id="clone-url" type="text" value="${url}" readonly aria-label="Clone URL"><button class="btn-small js-only" type="button" data-copy="#clone-url">Copy</button><span class="fee">Pull request required (${money(FEES.pull_file.amount)})</span></div>`;
+  return html`<div class="clone-box"><span class="clone-label">HTTPS</span><input id="clone-url" type="text" value="${url}" readonly aria-label="Clone URL"><button class="btn-small js-only" type="button" data-copy="#clone-url">Copy</button><span class="fee">Clone fee ${money(FEES.clone.amount)}. Pulling afterwards requires a pull request.</span></div>`;
 }
 
 /** Branch dropdown (a <details> menu: works without JavaScript; forge.js adds the filter). */

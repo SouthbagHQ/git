@@ -17,7 +17,8 @@ export type Service = 'git-upload-pack' | 'git-receive-pack';
 
 /** What the transport asks of the rules. src/routes/git.ts wires these to src/lib/policy.ts. */
 export interface GitPolicy {
-  beforeFetch(): Promise<Verdict>;
+  /** `clone`: the client sent no haves (a fresh clone), as opposed to a fetch or pull. */
+  beforeFetch(opts: { clone: boolean }): Promise<Verdict>;
   beforePush(): Promise<Verdict>;
   reviewPush(analyses: PushAnalysis[]): Promise<{ results: Record<string, string | null>; messages: string[] }>;
   /** DEV ONLY: move refs for ok'd updates ourselves (production leaves that to reviewPush/pushes.ts). */
@@ -218,7 +219,7 @@ export async function uploadPack(store: ObjectStore, body: Uint8Array, policy: G
     return concatBytes(out);
   }
 
-  const verdict = await policy.beforeFetch();
+  const verdict = await policy.beforeFetch({ clone: haves.length === 0 });
   if (!verdict.ok) return pkt(`ERR ${verdict.message}\n`);
   if (common.length) {
     if (multiAck) out.push(pkt(`ACK ${common[common.length - 1]}\n`));

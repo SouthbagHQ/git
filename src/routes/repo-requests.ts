@@ -23,7 +23,7 @@ const kindParam = (value: string | undefined): SimpleKind => {
 };
 
 const EXPLAIN: Record<SimpleKind, string> = {
-  pull: 'A pull request lets you run git pull, git fetch or git clone on this repository once. Approved pull requests must be used within 24 hours.',
+  pull: 'Cloning is free of requests (the clone fee applies). A pull request lets you run git pull or git fetch on this repository once. Approved pull requests must be used within 24 hours.',
   push: 'A push request lets you run git push to this repository once. Approved push requests must be used within 24 hours. Pushes are processed during business hours.',
   fork: 'A fork request lets you fork this repository. Once approved, execute the request to create the fork.',
   star: 'A star request lets you star this repository. Once approved, execute the request to apply the star.',

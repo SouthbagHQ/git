@@ -10,7 +10,9 @@ import { newId } from './ids';
 export { money };
 
 export const FEES = {
-  // Pull requests (permission to run git pull / fetch / clone once).
+  // Cloning needs no request. Fetching and pulling afterwards do.
+  clone: { amount: 150, label: 'Clone fee' },
+  // Pull requests (permission to run git pull / fetch once).
   pull_file: { amount: 250, label: 'Pull request filing fee' },
   pull_approve: { amount: 175, label: 'Pull request approval fee' },
   pull_execute: { amount: 420, label: 'Pull execution fee' },

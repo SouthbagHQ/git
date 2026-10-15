@@ -20,7 +20,7 @@ const RESERVED = new Set(['repo', 'explore', 'fees', 'waivers', 'billing', 'sett
   'status', 'terms', 'auth', 'api', 'css', 'js', 'img', 'admin', 'floor-3', 'palantir.js']);
 
 const FEE_GROUPS: [string, FeeKey[]][] = [
-  ['Pull requests', ['pull_file', 'pull_approve', 'pull_execute']],
+  ['Cloning and pull requests', ['clone', 'pull_file', 'pull_approve', 'pull_execute']],
   ['Push requests', ['push_file', 'push_approve', 'push_execute', 'push_after_hours', 'push_rejected']],
   ['Merge requests', ['merge_file', 'merge_approve', 'merge_execute', 'merge_conflict']],
   ['Fork requests', ['fork_file', 'fork_approve', 'fork_execute']],
