@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --var BANKING_DEV:1",
     "check": "tsc --noEmit",
     "test": "bash scripts/test.sh",
     "deploy": "npm run db:migrate:remote && wrangler deploy",

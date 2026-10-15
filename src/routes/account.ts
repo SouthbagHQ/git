@@ -15,6 +15,10 @@ import { card, dateTime, emptyState, page, statusWord, timeAgo } from '../views/
 
 const app = new Hono<AppEnv>();
 
+/** Paths a username would shadow. */
+const RESERVED = new Set(['repo', 'explore', 'fees', 'waivers', 'billing', 'settings', 'notifications', 'security', 'requests',
+  'status', 'terms', 'auth', 'api', 'css', 'js', 'img', 'admin', 'floor-3', 'palantir.js']);
+
 const FEE_GROUPS: [string, FeeKey[]][] = [
   ['Pull requests', ['pull_file', 'pull_approve', 'pull_execute']],
   ['Push requests', ['push_file', 'push_approve', 'push_execute', 'push_after_hours', 'push_rejected']],
@@ -159,7 +163,7 @@ app.post('/settings/username', async c => {
   const user = requireActiveUser(c);
   const username = str((await form(c)).username, 30);
   if (!/^[A-Za-z0-9-]{3,30}$/.test(username)) fail(400, 'Usernames are 3 to 30 letters, digits or hyphens.');
-  if (/^kevin$/i.test(username)) fail(409, 'That username is taken.');
+  if (/^kevin$/i.test(username) || RESERVED.has(username.toLowerCase())) fail(409, 'That username is taken.');
   if (await c.env.DB.prepare('SELECT 1 FROM users WHERE username = ?').bind(username).first()) fail(409, 'That username is taken.');
   await c.env.DB.prepare('UPDATE users SET username = ?, updated_at = ? WHERE id = ?').bind(username, Date.now(), user.id).run();
   await chargeFee(c.env, user, 'username_change', username);
@@ -293,5 +297,58 @@ app.get('/requests', async c => {
       ${card('Filed by you', table(mine))}`,
   }));
 });
+
+// ── Status and terms ──
+
+app.get('/status', async c => {
+  const now = Date.now();
+  const counts = await c.env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM pushes WHERE status IN ('pending', 'processing')) AS pending,
+      (SELECT COUNT(*) FROM pushes WHERE status = 'processed' AND processed_at > ?1) AS processed,
+      (SELECT COUNT(*) FROM waivers WHERE status = 'pending') AS waivers,
+      (SELECT COUNT(*) FROM users WHERE frozen = 1) AS frozen`).bind(now - 86400000).first<Record<string, number>>();
+  const open = isBusinessHours(now);
+  return c.html(page({
+    title: 'Status',
+    user: c.get('user'),
+    flash: c.get('flash'),
+    body: html`
+      <h1 class="page-title">Status</h1>
+      ${card('Push processing', html`<table class="table">
+        <tr><th>Processing</th><td>${open ? 'Open' : 'Closed'}</td></tr>
+        <tr><th>Business hours</th><td>9:00 to 17:00 AEST, Monday to Friday</td></tr>
+        ${open ? '' : html`<tr><th>Next opening</th><td>${aestText(nextOpening(now))}</td></tr>`}
+        <tr><th>Pushes pending</th><td>${counts?.pending ?? 0}</td></tr>
+        <tr><th>Pushes processed (24 hours)</th><td>${counts?.processed ?? 0}</td></tr>
+      </table>`)}
+      ${card('Other services', html`<table class="table">
+        <tr><th>Git over HTTPS</th><td>Operational</td></tr>
+        <tr><th>Fee collection</th><td>Operational</td></tr>
+        <tr><th>Fraud detection</th><td>Operational. ${counts?.frozen ?? 0} accounts under review.</td></tr>
+        <tr><th>Fee waiver assessment</th><td>Operational. ${counts?.waivers ?? 0} applications under assessment.</td></tr>
+        <tr><th>Floor 3</th><td>Not applicable</td></tr>
+      </table>`)}`,
+  }));
+});
+
+app.get('/terms', c => c.html(page({
+  title: 'Terms of Service',
+  user: c.get('user'),
+  flash: c.get('flash'),
+  body: html`
+    <h1 class="page-title">Terms of Service</h1>
+    <ol class="terms">
+      <li>Southbag Git is provided by Southbag. Continued use constitutes acceptance of these terms and any later terms.</li>
+      <li>Fees are set out in the <a href="/fees">fee schedule</a> and may change without notice. Fees are taken from your Southbag Online Banking account. Fees are final.</li>
+      <li>Every pull, push, fork, star and unstar requires a request approved by the repository owner.</li>
+      <li>Pushes are processed during business hours, 9:00 to 17:00 AEST, Monday to Friday. Southbag does not observe daylight saving.</li>
+      <li>Commit messages, issues and comments must not refer to topics that cannot be discussed. A list of these topics is not published.</li>
+      <li>Activity on Southbag Git is reviewed by automated fraud detection. Accounts may be frozen at any time. Frozen accounts are unfrozen by answering security questions.</li>
+      <li>Nothing on Southbag Git can be deleted.</li>
+      <li>Merge conflicts are resolved by Kevin. His decisions are final.</li>
+      <li>Every repository contains issue #1. It is considered resolved.</li>
+      <li>These terms are governed by the laws of the Australian Capital Territory, under protest.</li>
+    </ol>`,
+})));
 
 export default app;
