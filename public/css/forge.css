@@ -1,0 +1,303 @@
+/* Southbag Git — forge furniture: repository header and tabs, file table, blob view, diffs, commit
+   lists, issues and their timelines, request lists, fees and the clone box.
+   Greyscale only. Additions and deletions in diffs are told apart by their +/- prefix, a grey
+   shade and type style (bold for added, struck through and italic for removed), never by colour.
+   Monospace is used for code, hashes and the clone URL only. */
+
+.mono, code, pre, kbd, .sha, .code-table, .diff-table, .clone-box input, .ref-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+code { font-size: 0.9em; background: var(--sb-shade-1); padding: 0 3px; border: 1px solid var(--sb-hairline); }
+pre { overflow-x: auto; background: var(--sb-shade-1); border: 2px inset var(--sb-bevel); padding: 8px 10px; font-size: 0.85rem; }
+pre code { background: none; border: 0; padding: 0; }
+.sha { font-size: 0.85rem; }
+a.sha { text-decoration: underline; }
+
+/* ── Repository header ─────────────────────────────────────────────── */
+.repo-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: start; margin: 0 0 12px; padding: 0.75rem; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.repo-title { margin: 0; font-size: clamp(1.4rem, 3.5vw, 2.1rem); transform: rotate(-0.6deg); transform-origin: left; overflow-wrap: anywhere; max-width: none; }
+.repo-title a { text-decoration: none; }
+.repo-title .sep { color: var(--sb-muted); font-weight: 400; padding: 0 4px; }
+.repo-title .repo-name { color: var(--sb-blue); }
+.repo-meta { grid-column: 1; font-size: 0.85rem; color: var(--sb-muted); margin: 0; box-shadow: none; }
+.repo-desc { grid-column: 1; margin: 0; }
+.repo-actions { grid-column: 2; grid-row: 1 / span 3; display: flex; flex-direction: column; gap: 8px; align-items: stretch; box-shadow: none; }
+.repo-action { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 6px; align-items: center; margin: 0; box-shadow: none; }
+.repo-action button { grid-row: 1 / span 2; }
+.repo-action .count { font-weight: 700; font-size: 0.9rem; border: 2px inset var(--sb-bevel); padding: 0 6px; background: var(--sb-paper); align-self: end; justify-self: start; }
+.repo-action .fee { font-size: 0.7rem; color: var(--sb-muted); white-space: nowrap; }
+@media (max-width: 760px) {
+  .repo-header { grid-template-columns: minmax(0, 1fr); }
+  .repo-actions { grid-column: 1; grid-row: auto; flex-direction: row; flex-wrap: wrap; }
+}
+.repo-tabs { margin-top: 4px; }
+.repo-tabs .tab-count { font-size: 0.8em; color: var(--sb-muted); font-weight: 400; }
+.repo-tabs .tab-count::before { content: ' ('; } .repo-tabs .tab-count::after { content: ')'; }
+.repo-tabs a.settings-tab { margin-left: auto; }
+
+/* ── Toolbar above the file table ───────────────────────────────────── */
+.repo-toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 10px; box-shadow: none; }
+.repo-toolbar .spacer { flex: 1; box-shadow: none; }
+.breadcrumbs { font-weight: 700; overflow-wrap: anywhere; box-shadow: none; }
+.breadcrumbs .sep { color: var(--sb-muted); font-weight: 400; padding: 0 3px; }
+.branch-menu > summary { min-width: 140px; text-align: left; }
+.branch-menu > summary::after { content: ' (change)'; font-size: 0.75em; }
+.branch-menu .menu { max-height: 320px; overflow-y: auto; }
+.ref-name { font-size: 0.9rem; }
+
+/* Clone box: label, a read-only URL and a Copy button. */
+.clone-box { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 520px; flex: 1 1 320px; box-shadow: none; }
+.clone-box .clone-label { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.clone-box input { font-size: 0.8rem; min-width: 0; flex: 1; }
+.clone-box .fee { font-size: 0.7rem; color: var(--sb-muted); white-space: nowrap; }
+
+/* ── File table ─────────────────────────────────────────────────────── */
+.latest-commit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border: 2px ridge var(--sb-ridge); border-bottom: 0; background: var(--sb-shade-1); font-size: 0.9rem; box-shadow: none; }
+.latest-commit .message { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-table { width: 100%; border-collapse: collapse; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); table-layout: fixed; margin: 0 0 1rem; }
+.file-table td { padding: 5px 10px; border-bottom: 1px dashed #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-table tr:last-child td { border-bottom: 0; }
+.file-table tbody tr:hover { background: var(--sb-shade-1); }
+.file-table .name { width: 32%; }
+.file-table .message { color: var(--sb-muted); }
+.file-table .message a { color: var(--sb-muted); }
+.file-table .when { width: 140px; text-align: right; color: var(--sb-muted); font-size: 0.85rem; }
+.file-table .kind { display: inline-block; width: 3.6em; font-size: 0.7rem; color: var(--sb-muted); text-transform: uppercase; letter-spacing: 1px; }
+.file-table tr.dir .name a { font-weight: 700; }
+@media (max-width: 640px) {
+  .file-table .name { width: 55%; }
+  .file-table .when { width: 90px; font-size: 0.75rem; }
+  .file-table .kind { display: none; }
+}
+
+/* ── README and rendered Markdown ───────────────────────────────────── */
+.readme { padding: 0; }
+.readme > .readme-head { padding: 6px 10px; border-bottom: 2px dashed var(--sb-rule); font-weight: 700; font-size: 0.9rem; box-shadow: none; }
+.readme > .markdown { padding: 0.75rem 1rem; }
+.markdown { overflow-wrap: anywhere; box-shadow: none; }
+.markdown h1 { font-size: 2rem; max-width: none; }
+.markdown h2 { font-size: 1.5rem; margin-top: 1em; }
+.markdown h3 { font-size: 1.15rem; margin-top: 1em; }
+.markdown ul, .markdown ol { box-shadow: none; padding-left: 1.6em; }
+.markdown li { box-shadow: none; }
+.markdown a { color: var(--sb-blue); }
+.markdown blockquote { margin: 8px 0; padding: 4px 12px; border-left: 4px double var(--sb-rule); color: var(--sb-muted); }
+.markdown table { border-collapse: collapse; }
+.markdown th, .markdown td { border: 1px solid var(--sb-hairline); padding: 4px 8px; }
+.markdown hr { border: 0; border-top: 2px dashed var(--sb-rule); }
+.markdown img { max-width: 100%; }
+
+/* ── Blob (file) view with line numbers ─────────────────────────────── */
+.blob { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); margin: 0 0 1rem; min-width: 0; }
+.blob-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 10px; border-bottom: 2px dashed var(--sb-rule); font-size: 0.85rem; box-shadow: none; }
+.blob-head .path { font-weight: 700; overflow-wrap: anywhere; }
+.blob-head .spacer { flex: 1; box-shadow: none; }
+.blob-body { overflow-x: auto; box-shadow: none; }
+.code-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; line-height: 1.5; }
+.code-table td { padding: 0 10px; vertical-align: top; }
+.code-table td.ln { width: 1%; min-width: 3.5em; text-align: right; color: var(--sb-faint); background: var(--sb-shade-1); border-right: 2px dashed var(--sb-hairline); user-select: none; white-space: nowrap; }
+.code-table td.ln a { color: inherit; text-decoration: none; }
+.code-table td.lc { white-space: pre; }
+.code-table tr:target td { background: var(--sb-shade-2); }
+.blob-binary { padding: 24px; text-align: center; color: var(--sb-muted); }
+
+/* ── Diffs ──────────────────────────────────────────────────────────── */
+.diff-stat { font-size: 0.85rem; color: var(--sb-muted); margin: 0 0 8px; box-shadow: none; }
+.diff-file { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); margin: 0 0 1rem; min-width: 0; }
+.diff-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 10px; border-bottom: 2px dashed var(--sb-rule); font-size: 0.85rem; background: var(--sb-shade-1); box-shadow: none; }
+.diff-head .path { font-weight: 700; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.diff-head .change { font-size: 0.75rem; border: 1px solid #999; padding: 0 5px; }
+.diff-head .counts { white-space: nowrap; }
+.diff-body { overflow-x: auto; box-shadow: none; }
+.diff-table { border-collapse: collapse; width: 100%; font-size: 0.8rem; line-height: 1.45; }
+.diff-table td { padding: 0 8px; vertical-align: top; }
+.diff-table td.ln { width: 1%; min-width: 3em; text-align: right; color: var(--sb-faint); border-right: 1px dashed var(--sb-hairline); user-select: none; white-space: nowrap; }
+.diff-table td.sign { width: 1%; padding: 0 4px; text-align: center; font-weight: 700; user-select: none; }
+.diff-table td.code { white-space: pre; }
+.diff-table tr.hunk td { background: var(--sb-shade-2); color: var(--sb-muted); font-style: italic; padding: 2px 8px; }
+.diff-table tr.add td { background: var(--sb-shade-1); }
+.diff-table tr.add td.code { font-weight: 700; }
+.diff-table tr.del td { background: var(--sb-shade-3); }
+.diff-table tr.del td.code { text-decoration: line-through; text-decoration-thickness: 1px; font-style: italic; color: var(--sb-muted); }
+.diff-table tr.note td { color: var(--sb-muted); font-style: italic; padding: 6px 10px; }
+
+/* ── Commits ────────────────────────────────────────────────────────── */
+.commit-list { list-style: none; margin: 0 0 1rem; padding: 0; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.commit-day { padding: 4px 10px; font-size: 0.8rem; font-weight: 700; color: var(--sb-muted); background: var(--sb-shade-1); border-bottom: 1px dashed #999; box-shadow: none; }
+.commit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border-bottom: 1px dashed #999; box-shadow: none; }
+.commit-row:last-child { border-bottom: 0; }
+.commit-row .message { flex: 1 1 280px; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.commit-row .meta { font-size: 0.8rem; color: var(--sb-muted); }
+.commit-row .sha { border: 2px inset var(--sb-bevel); padding: 0 6px; background: var(--sb-paper); text-decoration: none; }
+.commit-head { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); padding: 0.75rem; margin: 0 0 1rem; }
+.commit-head .message { font-size: 1.2rem; font-weight: 700; white-space: pre-wrap; margin: 0 0 6px; }
+.commit-head .body { white-space: pre-wrap; font-size: 0.9rem; margin: 0 0 8px; }
+.commit-head .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; color: var(--sb-muted); box-shadow: none; }
+
+/* ── Issues and merge requests ──────────────────────────────────────── */
+.list-filters { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 10px; box-shadow: none; }
+.list-filters a[aria-current='page'] { font-weight: 700; color: var(--sb-blue); background: var(--sb-current); }
+.list-filters .spacer { flex: 1; box-shadow: none; }
+.issue-list { list-style: none; margin: 0 0 1rem; padding: 0; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.issue-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 8px 10px; border-bottom: 1px dashed #999; box-shadow: none; }
+.issue-row:last-child { border-bottom: 0; }
+.issue-row .status { grid-row: 1 / span 2; }
+.issue-row .title { font-weight: 700; overflow-wrap: anywhere; }
+.issue-row .meta { grid-column: 2; font-size: 0.8rem; color: var(--sb-muted); }
+.issue-row .side { grid-column: 3; grid-row: 1 / span 2; font-size: 0.8rem; color: var(--sb-muted); white-space: nowrap; }
+.issue-title { font-size: clamp(1.6rem, 4vw, 2.6rem); max-width: none; }
+.issue-title .number { color: var(--sb-muted); font-weight: 400; }
+.issue-sub { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 0 0 14px; padding: 0 0 8px; border-bottom: 2px dashed var(--sb-rule); color: var(--sb-muted); font-size: 0.9rem; box-shadow: none; }
+.issue-layout { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 1rem; box-shadow: none; }
+.issue-layout > aside { display: flex; flex-direction: column; gap: 10px; box-shadow: none; }
+.issue-layout > aside .south-card { margin: 0; font-size: 0.9rem; }
+.issue-layout > aside h3 { font-size: 0.9rem; margin: 0 0 4px; }
+@media (max-width: 800px) { .issue-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Labels are plain text in square brackets. */
+.label { display: inline-block; font-size: 0.78rem; color: var(--sb-ink); white-space: nowrap; box-shadow: none; }
+.label::before { content: '['; color: var(--sb-muted); } .label::after { content: ']'; color: var(--sb-muted); }
+
+/* Status words: plain bordered text. Different borders, same grey. */
+.status { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 0 6px; border: 2px solid var(--sb-ink); color: var(--sb-ink); white-space: nowrap; text-transform: none; box-shadow: none; }
+.status-open, .status-pending, .status-queued, .status-processing { border-style: dashed; }
+.status-approved, .status-charged { border-style: solid; }
+.status-executed, .status-merged, .status-processed { border-style: double; border-width: 4px; padding: 0 5px; }
+.status-declined, .status-rejected, .status-failed { border-style: solid; text-decoration: line-through; }
+.status-withdrawn, .status-expired, .status-closed, .status-cancelled { border-style: dotted; color: var(--sb-muted); border-color: var(--sb-muted); }
+
+/* Timeline: comments in ridge boxes on a dashed line, events as small lines. */
+.timeline { position: relative; margin: 0 0 1rem; padding: 0 0 0 18px; border-left: 2px dashed var(--sb-rule); box-shadow: none; }
+.timeline-item { position: relative; margin: 0 0 14px; }
+.timeline-item.comment { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.timeline-item.comment:nth-child(4n + 3) { transform: rotate(-0.3deg); }
+.comment-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 10px; border-bottom: 1px dashed #999; background: var(--sb-shade-1); font-size: 0.85rem; box-shadow: none; }
+.comment-head .spacer { flex: 1; box-shadow: none; }
+.comment-head .role { font-size: 0.7rem; border: 1px solid #999; padding: 0 4px; color: var(--sb-muted); }
+.comment-body { padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: none; }
+.comment-body.markdown { white-space: normal; }
+.timeline-item.event { font-size: 0.85rem; color: var(--sb-muted); padding: 2px 0; box-shadow: none; }
+.timeline-item.event a { color: var(--sb-ink); }
+.comment-form { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); padding: 0.75rem; }
+.comment-form textarea { min-height: 8rem; }
+.locked-note { border: 4px double #111; padding: 8px 12px; color: var(--sb-muted); }
+
+/* ── Requests ───────────────────────────────────────────────────────── */
+.request-list { list-style: none; margin: 0 0 1rem; padding: 0; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 10px; border-bottom: 1px dashed #999; box-shadow: none; }
+.request-row:last-child { border-bottom: 0; }
+.request-row .what { flex: 1 1 260px; min-width: 0; }
+.request-row .what strong { overflow-wrap: anywhere; }
+.request-row .meta { display: block; font-size: 0.8rem; color: var(--sb-muted); }
+.request-row .reason { display: block; font-size: 0.85rem; font-style: italic; overflow-wrap: anywhere; }
+.request-row .decide { display: flex; gap: 6px; flex-wrap: wrap; box-shadow: none; }
+
+/* ── Fees ───────────────────────────────────────────────────────────── */
+.fee { white-space: nowrap; }
+.fee-notice { border: 4px double #111; background: var(--sb-paper); padding: 8px 12px; margin: 0 0 12px; font-size: 0.9rem; }
+:root[data-theme='dark'] .fee-notice { border-color: #999; }
+.fee-notice strong { white-space: nowrap; }
+.fee-table td.amount, .fee-table th.amount { text-align: right; white-space: nowrap; font-weight: 700; }
+.fee-table td.key { font-size: 0.75rem; color: var(--sb-muted); }
+.balance-note { font-size: 0.8rem; color: var(--sb-muted); }
+
+/* ── Dashboard, profile, explore ────────────────────────────────────── */
+.repo-list { list-style: none; margin: 0 0 1rem; padding: 0; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.repo-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 10px; border-bottom: 1px dashed #999; box-shadow: none; }
+.repo-row:last-child { border-bottom: 0; }
+.repo-row .name { font-weight: 700; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.repo-row .desc { flex-basis: 100%; font-size: 0.85rem; color: var(--sb-muted); margin: 0; }
+.repo-row .stats { font-size: 0.8rem; color: var(--sb-muted); white-space: nowrap; }
+.profile-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 1rem; box-shadow: none; }
+.profile-card { text-align: left; }
+.profile-card .avatar { margin: 0 0 10px; }
+.profile-card .name { font-size: 1.3rem; font-weight: 700; margin: 0; }
+.profile-card .username { color: var(--sb-muted); margin: 0 0 8px; }
+@media (max-width: 760px) { .profile-layout { grid-template-columns: minmax(0, 1fr); } }
+.activity-list { list-style: none; margin: 0; padding: 0; box-shadow: none; }
+.activity-list li { padding: 6px 0; border-bottom: 1px dashed #999; font-size: 0.9rem; box-shadow: none; }
+.activity-list li:last-child { border-bottom: 0; }
+.activity-list .when { font-size: 0.8rem; color: var(--sb-muted); }
+
+/* ── Pagination ─────────────────────────────────────────────────────── */
+.pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 12px 0; box-shadow: none; }
+.pagination .page { font-size: 0.85rem; color: var(--sb-muted); }
+.pagination .disabled { color: #c4c2bc; cursor: default; animation: none; }
+
+/* ── Flash (shown as a dialog by forge.js; a notice without JavaScript) ── */
+#flash { margin: 0 0 14px; }
+.js #flash { display: none; }
+
+/* ── Page vocabulary used by the route templates ────────────────────── */
+.page-title { font-size: clamp(2rem, 6vw, 3.6rem); transform: rotate(-1deg); transform-origin: left; max-width: 20ch; margin: 4px 0 12px; }
+.lead { font-size: 1.15rem; margin: 0 0 14px; max-width: 60ch; }
+.hint { font-size: 0.78rem; color: var(--sb-muted); }
+.card { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); padding: 0.75rem; margin: 0 0 1rem; min-width: 0; }
+.kevin { font-style: italic; }
+.kevin::before { content: 'Kevin: '; font-style: normal; font-weight: 700; }
+.state-word { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 0 6px; border: 2px solid var(--sb-ink); white-space: nowrap; box-shadow: none; }
+
+/* Generic tables: .table is the same as .data-table. */
+.table, .request-table, .fee-table { width: 100%; border-collapse: collapse; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); margin: 0 0 1rem; }
+.table th, .table td, .request-table th, .request-table td, .fee-table th, .fee-table td { text-align: left; padding: 6px 8px; border-bottom: 1px dashed #999; vertical-align: top; }
+.table th, .request-table th, .fee-table th { font-size: 0.8rem; color: var(--sb-muted); border-bottom: 2px dashed var(--sb-rule); }
+.table tr:last-child td, .request-table tr:last-child td, .fee-table tr:last-child td { border-bottom: 0; }
+.table tbody tr:nth-child(2n), .request-table tbody tr:nth-child(2n), .fee-table tbody tr:nth-child(2n) { background: var(--sb-shade-1); }
+.request-table td form { display: inline-block; margin: 0 4px 4px 0; box-shadow: none; }
+.request-table .reason { font-style: italic; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .table, .request-table, .fee-table { display: block; overflow-x: auto; }
+}
+
+/* Lists: notifications, activity, anything one-per-line. */
+.list { list-style: none; margin: 0 0 1rem; padding: 0; border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+.list-item { padding: 8px 10px; border-bottom: 1px dashed #999; overflow-wrap: anywhere; box-shadow: none; }
+.list-item:last-child { border-bottom: 0; }
+.list-item.unread { font-weight: 700; background: var(--sb-shade-1); border-left: 4px double var(--sb-blue); }
+.list-item .hint, .list-item .muted { font-weight: 400; }
+.repo-list-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 10px; border-bottom: 1px dashed #999; box-shadow: none; }
+.repo-list-item:last-child { border-bottom: 0; }
+.repo-list-name { font-weight: 700; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.repo-list-item p { flex-basis: 100%; margin: 0; font-size: 0.85rem; color: var(--sb-muted); }
+.issue-list-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 10px; border-bottom: 1px dashed #999; box-shadow: none; }
+.issue-list-item:last-child { border-bottom: 0; }
+.issue-list-item a { font-weight: 700; overflow-wrap: anywhere; }
+.issue-list-item .hint { flex-basis: 100%; }
+
+/* Forms: labels wrap their inputs. */
+.form { display: flex; flex-direction: column; gap: 14px; max-width: 640px; box-shadow: none; }
+.form > label, .form .split > label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; transform: none; box-shadow: none; }
+.form > label > :not(input):not(textarea):not(select), .form .split > label > :not(input):not(textarea):not(select) { font-weight: 400; }
+.form > label > input, .form > label > textarea, .form > label > select, .form .split > label > input, .form .split > label > select { font-weight: 400; }
+.form-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; box-shadow: none; }
+.form-inline input:not([type=checkbox]):not([type=radio]):not([type=hidden]) { width: auto; flex: 1 1 200px; }
+.form-inline select { width: auto; }
+label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; transform: skew(3deg); cursor: pointer; box-shadow: none; }
+.form > label.check { flex-direction: row; font-weight: 400; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; box-shadow: none; }
+@media (max-width: 640px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Dashboard and profile: main column and a side column. */
+.dashboard { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1rem; align-items: start; box-shadow: none; }
+.profile { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1rem; align-items: start; box-shadow: none; }
+.profile-side { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); padding: 0.75rem; overflow-wrap: anywhere; }
+.profile-side .avatar-large, .profile-side .avatar { margin: 0 0 10px; }
+.profile-main { min-width: 0; box-shadow: none; }
+@media (max-width: 860px) { .dashboard, .profile { grid-template-columns: minmax(0, 1fr); } }
+.avatar-large { --size: 160px; }
+.avatar.avatar-large { --size: 160px; }
+
+code.token { display: block; padding: 8px 10px; border: 4px double #111; background: var(--sb-field); color: var(--sb-field-ink); font-size: 0.95rem; overflow-wrap: anywhere; user-select: all; cursor: copy; }
+
+.landing { max-width: 1000px; margin: 0 auto; box-shadow: none; }
+.landing .hero-logo { display: block; width: 112%; max-width: none; height: 110px; margin: 0.5rem 0 1.5rem; box-shadow: none; }
+@media (max-width: 640px) { .landing .hero-logo { width: 100%; height: 60px; } }
+.landing h1 { font-size: clamp(2.6rem, 9vw, 6rem); line-height: 0.9; }
+.landing .cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 1.5rem 0; box-shadow: none; }
+
+.timeline-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 10px; border-bottom: 1px dashed #999; background: var(--sb-shade-1); font-size: 0.85rem; box-shadow: none; }
+.timeline-body { padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: none; }
+.timeline-item:not(.event) { border: 2px ridge var(--sb-ridge); background: var(--sb-panel); }
+
+.pending-banner { border: 4px double #111; background: var(--sb-paper-nav); padding: 8px 12px; margin: 0 0 10px; font-size: 0.9rem; }
+:root[data-theme='dark'] .pending-banner, :root[data-theme='dark'] code.token { border-color: #999; }
