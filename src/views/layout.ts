@@ -394,7 +394,7 @@ export const repoPath = (repo: Pick<Repo, 'owner' | 'name'>) => `/${encodeURICom
 
 /**
  * Forgejo-style repository header: owner / name, "Forked from", description, the request buttons
- * (each a form with its filing fee) and the tab bar.
+ * (each a GET form to the request tab, which has the filing form with its reason; filing fee shown) and the tab bar.
  *   counts: { issues, merge, pull, push, pushes, fork, star } shown after tab labels.
  *   parent: the repository this was forked from (or forkedFrom: "owner/name").
  *   isOwner: shows the Settings tab (default: user.id === repo.owner_id).
@@ -405,10 +405,11 @@ export function repoHeader(repo: Repo, opts: { user: User | null | undefined; ac
   const full = `${repo.owner}/${repo.name}`;
   const fromText = opts.forkedFrom?.split('/');
   const parent = opts.parent ?? (fromText?.length === 2 ? { owner: fromText[0], name: fromText[1] } : null);
-  const action = (kind: 'star' | 'unstar' | 'fork' | 'pull' | 'push', text: string, confirmText: string, count?: number) => {
+  // The filing form (with its required reason) is on the request tab, so these go there.
+  const action = (kind: 'star' | 'unstar' | 'fork' | 'pull' | 'push', text: string, _confirmText: string, count?: number) => {
     const fee = FEES[`${kind}_file` as FeeKey];
-    return html`<form class="repo-action" method="post" action="${base}/requests/${kind}" data-confirm="${confirmText}" data-fee="${money(fee.amount)}">
-      <input type="hidden" name="reason" value=""><button class="btn-small" type="submit">${text}</button>${count != null ? html`<span class="count" title="${text}">${count}</span>` : html`<span></span>`}
+    return html`<form class="repo-action" method="get" action="${base}/requests/${kind === 'unstar' ? 'star' : kind}">
+      <button class="btn-small" type="submit">${text}</button>${count != null ? html`<span class="count" title="${text}">${count}</span>` : html`<span></span>`}
       <span class="fee">Filing fee ${money(fee.amount)}</span>
     </form>`;
   };

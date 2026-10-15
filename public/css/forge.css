@@ -308,3 +308,7 @@ code.token { display: block; padding: 8px 10px; border: 4px double #111; backgro
   .clone-box input { flex-basis: 100%; order: 2; }
 }
 .blob-latest .latest-commit { border-bottom: 2px ridge var(--sb-ridge); margin: 0 0 10px; }
+/* Open / Closed filters on list pages (route templates use p.tabs-small with a.current). */
+.tabs-small { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 10px; box-shadow: none; }
+.tabs-small a.current { font-weight: 700; color: var(--sb-blue); background: var(--sb-current); }
+.tabs-small .btn, .tabs-small .btn-small { margin-left: auto; }
