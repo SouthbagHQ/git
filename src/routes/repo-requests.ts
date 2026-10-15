@@ -47,6 +47,7 @@ app.get('/:owner/:repo/requests/:kind', async c => {
   const label = tabKind === 'unstar' ? 'Star requests' : KIND_LABEL[tabKind] + 's';
   return c.html(page({
     title: `${label} - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`
@@ -100,6 +101,7 @@ app.get('/:owner/:repo/requests/:kind/:id', async c => {
       <button class="btn" type="submit">${label}</button></form>`;
   return c.html(page({
     title: `${KIND_LABEL[kind]} - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`

@@ -35,7 +35,7 @@ export const comments = async (c: Ctx, repo: Repo, number: number) =>
 export const timelineItem = (author: string, when: string, body: string) => html`
   <div class="timeline-item">
     <div class="timeline-meta">${userLink(author)} <span class="muted">${when}</span></div>
-    <div class="timeline-body ${author === 'Kevin' ? 'kevin' : ''}">${body ? html`<p class="prewrap">${body}</p>` : html`<p class="muted">No description provided.</p>`}</div>
+    <div class="timeline-body">${body ? html`<p class="prewrap">${body}</p>` : html`<p class="muted">No description provided.</p>`}</div>
   </div>`;
 
 /** Posts a comment (with the comment fee) on an issue or merge request. */
@@ -79,6 +79,7 @@ app.get('/:owner/:repo/issues', async c => {
     .bind(repo.id, state).all<IssueRow>();
   return c.html(page({
     title: `Issues - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user: c.get('user'),
     flash: c.get('flash'),
     body: html`
@@ -99,6 +100,7 @@ app.get('/:owner/:repo/issues/new', async c => {
   const repo = await loadRepo(c);
   return c.html(page({
     title: `New issue - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`
@@ -138,6 +140,7 @@ app.get('/:owner/:repo/issues/:number', async c => {
   const canClose = user && !issue.immutable && (user.id === repo.owner_id || user.id === issue.author_id);
   return c.html(page({
     title: `${issue.title} - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`

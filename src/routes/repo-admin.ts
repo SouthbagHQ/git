@@ -23,6 +23,7 @@ app.get('/:owner/:repo/pushes', async c => {
   const now = Date.now();
   return c.html(page({
     title: `Push queue - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user: c.get('user'),
     flash: c.get('flash'),
     body: html`
@@ -55,6 +56,7 @@ app.get('/:owner/:repo/settings', async c => {
   const branches = await listVisibleBranches(c.env, repo);
   return c.html(page({
     title: `Settings - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`

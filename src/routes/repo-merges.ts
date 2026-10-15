@@ -56,6 +56,7 @@ app.get('/:owner/:repo/merge-requests', async c => {
     ? "IN ('open', 'approved')" : "IN ('merged', 'closed')"} ORDER BY merge_requests.number DESC LIMIT 100`).bind(repo.id).all<MergeRow>();
   return c.html(page({
     title: `Merge requests - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user: c.get('user'),
     flash: c.get('flash'),
     body: html`
@@ -81,6 +82,7 @@ app.get('/:owner/:repo/merge-requests/new', async c => {
   const targets = await listVisibleBranches(c.env, repo);
   return c.html(page({
     title: `New merge request - ${repo.owner}/${repo.name}`,
+    layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`

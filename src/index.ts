@@ -12,6 +12,7 @@ import git from './routes/git';
 import account from './routes/account';
 import home from './routes/home';
 import repo from './routes/repo';
+import mergeInbox from './routes/merge-inbox';
 
 const app = new Hono<AppEnv>();
 
@@ -65,6 +66,7 @@ app.get('/api/me', c => {
 
 // Fixed paths (account) before /:owner (home) before /:owner/:repo (repo).
 app.route('/', account);
+app.route('/', mergeInbox);
 app.route('/', home);
 app.route('/', repo);
 
