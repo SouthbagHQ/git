@@ -1,10 +1,15 @@
 // The rules git over HTTPS has to get past. The transport (src/routes/git.ts, src/git/*) calls these
 // and never decides anything about money, requests, fraud or business hours itself.
 //
-// STUBS: the signatures are the contract; the bodies are filled in by src/lib/requests.ts,
-// src/lib/fraud.ts and src/lib/pushes.ts.
-
 import type { Env, Repo, User } from '../env';
+import { chargeFee, FEES, money } from './fees';
+import { hasApproved, consumeApproved } from './requests';
+import { reviewPush as review } from './pushes';
+import { repoUrl } from './repos';
+import { userFromBasicAuth } from './tokens';
+
+const site = 'https://git.southbag.cc';
+const frozen = { ok: false, message: `Your account is frozen pending review. Answer the security questions at ${site}/security` } as const;
 
 export type Waiter = { waitUntil(promise: Promise<unknown>): void };
 
@@ -44,8 +49,8 @@ export interface PushAnalysis {
 export type Verdict = { ok: true } | { ok: false; message: string };
 
 /** Basic auth on git requests: username (or anything) + personal access token as the password. */
-export async function gitAuthenticate(_env: Env, _request: Request): Promise<User | null> {
-  return null;
+export async function gitAuthenticate(env: Env, request: Request): Promise<User | null> {
+  return userFromBasicAuth(env, request);
 }
 
 /**
@@ -53,12 +58,22 @@ export async function gitAuthenticate(_env: Env, _request: Request): Promise<Use
  * Needs an approved pull request on the repo; consumes it and charges the execution fee.
  * The message is shown by git as `remote: …` / `fatal: …`.
  */
-export async function beforeFetch(_env: Env, _ctx: Waiter, _user: User, _repo: Repo): Promise<Verdict> {
+export async function beforeFetch(env: Env, _ctx: Waiter, user: User, repo: Repo): Promise<Verdict> {
+  if (user.frozen) return frozen;
+  if (!await consumeApproved(env, user, repo, 'pull'))
+    return { ok: false, message: `You need an approved pull request to pull from ${repo.owner}/${repo.name}. File one at ${site}${repoUrl(repo)}/requests/pull` };
+  await chargeFee(env, user, 'pull_execute', `${repo.owner}/${repo.name}`);
   return { ok: true };
 }
 
+/** Line shown after a successful fetch. */
+export const fetchNote = `Pull request used. ${FEES.pull_execute.label}: ${money(FEES.pull_execute.amount)}.`;
+
 /** Called on the receive-pack ref advertisement and before reading a pushed pack. Needs an approved push request. */
-export async function beforePush(_env: Env, _user: User, _repo: Repo): Promise<Verdict> {
+export async function beforePush(env: Env, user: User, repo: Repo): Promise<Verdict> {
+  if (user.frozen) return frozen;
+  if (!await hasApproved(env, user, repo, 'push'))
+    return { ok: false, message: `You need an approved push request to push to ${repo.owner}/${repo.name}. File one at ${site}${repoUrl(repo)}/requests/push` };
   return { ok: true };
 }
 
@@ -68,7 +83,7 @@ export async function beforePush(_env: Env, _user: User, _repo: Repo): Promise<V
  * null for "ok" or the reason for "ng", plus lines to print as `remote: …`.
  * The transport must NOT move refs itself.
  */
-export async function reviewPush(_env: Env, _ctx: Waiter, _user: User, _repo: Repo, _analyses: PushAnalysis[]):
+export async function reviewPush(env: Env, ctx: Waiter, user: User, repo: Repo, analyses: PushAnalysis[]):
   Promise<{ results: Record<string, string | null>; messages: string[] }> {
-  return { results: {}, messages: [] };
+  return review(env, ctx, user, repo, analyses);
 }
