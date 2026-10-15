@@ -65,7 +65,7 @@ export async function beforeFetch(env: Env, _ctx: Waiter, user: User, repo: Repo
     return { ok: true };
   }
   if (!await consumeApproved(env, user, repo, 'pull'))
-    return { ok: false, message: `You need an approved pull request to pull from ${repo.owner}/${repo.name}. File one at ${site}/requests` };
+    return { ok: false, message: `You need an approved pull request to pull from ${repo.owner}/${repo.name}. File one at ${site}/requests (signed in as ${user.username})` };
   await chargeFee(env, user, 'pull_execute', `${repo.owner}/${repo.name}`);
   return { ok: true };
 }
@@ -77,7 +77,7 @@ export const fetchNote = `Pull request used. ${FEES.pull_execute.label}: ${money
 export async function beforePush(env: Env, user: User, repo: Repo): Promise<Verdict> {
   if (user.frozen) return frozen;
   if (!await hasApproved(env, user, repo, 'push'))
-    return { ok: false, message: `You need an approved push request to push to ${repo.owner}/${repo.name}. File one at ${site}/requests` };
+    return { ok: false, message: `You need an approved push request to push to ${repo.owner}/${repo.name}. File one at ${site}/requests (signed in as ${user.username})` };
   return { ok: true };
 }
 
