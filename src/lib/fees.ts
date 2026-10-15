@@ -43,7 +43,7 @@ export const FEES = {
   request_decline: { amount: 150, label: 'Declined request processing fee' },
   request_withdraw: { amount: 100, label: 'Request withdrawal fee' },
   repo_create: { amount: 1000, label: 'Repository establishment fee' },
-  issue_file: { amount: 50, label: 'Issue lodgement fee' },
+  issue_file: { amount: 50, label: 'Issue filing fee' },
   comment: { amount: 10, label: 'Comment fee' },
   token_create: { amount: 500, label: 'Access token issuance fee' },
   waiver_apply: { amount: 1500, label: 'Fee waiver application fee' },

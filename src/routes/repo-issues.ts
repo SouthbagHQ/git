@@ -52,7 +52,7 @@ export async function postComment(c: Ctx, repo: Repo, number: number, authorId: 
 }
 
 export const commentForm = (action: string) => html`
-  <form method="post" action="${action}" class="form comment-form" data-form="SG-C2">
+  <form method="post" action="${action}" class="form comment-form">
     <label>Comment<textarea name="body" required maxlength="10000" rows="5"></textarea></label>
     <button class="btn" type="submit">Comment (${money(FEES.comment.amount)})</button>
   </form>`;
@@ -110,10 +110,10 @@ app.get('/:owner/:repo/issues/new', async c => {
     body: html`
       ${await header(c, repo, 'issues')}
       ${card('New issue', html`
-        <form method="post" action="${repoUrl(repo)}/issues/new" class="form" data-form="SG-I1" data-confirm="Lodge this issue? The issue lodgement fee is ${money(FEES.issue_file.amount)}.">
+        <form method="post" action="${repoUrl(repo)}/issues/new" class="form" data-confirm="Open this issue? The issue filing fee is ${money(FEES.issue_file.amount)}.">
           <label>Title<input name="title" required maxlength="200"></label>
           <label>Description<textarea name="body" maxlength="20000" rows="10"></textarea></label>
-          <button class="btn" type="submit">Lodge issue (${money(FEES.issue_file.amount)})</button>
+          <button class="btn" type="submit">Open issue (${money(FEES.issue_file.amount)})</button>
         </form>`)}`,
   }));
 });
@@ -132,8 +132,8 @@ app.post('/:owner/:repo/issues/new', async c => {
   await c.env.DB.prepare(`INSERT INTO issues (id, repo_id, number, author_id, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .bind(newId(), repo.id, row!.number, user.id, title, body, Date.now()).run();
   await chargeFee(c.env, user, 'issue_file', `${repo.owner}/${repo.name}#${row!.number}`);
-  if (repo.owner_id !== user.id) await notify(c.env, repo.owner_id, `${user.username} lodged issue #${row!.number} on ${repo.owner}/${repo.name}.`, `${repoUrl(repo)}/issues/${row!.number}`);
-  return redirect(c, `${repoUrl(repo)}/issues/${row!.number}`, `Issue lodged. Issue lodgement fee: ${money(FEES.issue_file.amount)}.`);
+  if (repo.owner_id !== user.id) await notify(c.env, repo.owner_id, `${user.username} opened issue #${row!.number} on ${repo.owner}/${repo.name}.`, `${repoUrl(repo)}/issues/${row!.number}`);
+  return redirect(c, `${repoUrl(repo)}/issues/${row!.number}`, `Issue opened. Issue filing fee: ${money(FEES.issue_file.amount)}.`);
 });
 
 app.get('/:owner/:repo/issues/:number', async c => {

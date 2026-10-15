@@ -66,7 +66,7 @@ app.get('/:owner/:repo/settings', async c => {
     body: html`
       ${await header(c, repo, 'settings')}
       ${card('Repository', html`
-        <form method="post" action="${repoUrl(repo)}/settings" class="form" data-form="SG-R4">
+        <form method="post" action="${repoUrl(repo)}/settings" class="form">
           <label>Description<input name="description" value="${repo.description}" maxlength="250"></label>
           <label>Default branch<select name="branch">${branches.length ? branches.map(b => html`<option ${b.name === repo.default_branch ? 'selected' : ''}>${b.name}</option>`)
             : html`<option>${repo.default_branch}</option>`}</select></label>

@@ -1,5 +1,5 @@
 // Dev-only preview of the views with fake data: GET /__preview (?signedout=1, ?frozen=1, ?starred=1,
-// ?layout=default|wide|narrow, ?flash=Text: "Error: …" is a rejection notice, "$" makes a receipt)
+// ?layout=default|wide|narrow, ?flash=Text: "Error: …" is an error)
 // and GET /__preview/error.
 
 import { Hono } from 'hono';
@@ -9,7 +9,7 @@ import { FEES, type FeeKey } from '../lib/fees';
 import { blobView, branchMenu, breadcrumbs, cloneBox, commitList, diffView, fileTable } from './code';
 import {
   avatar, button, card, confirmForm, dateOnly, dateTime, emptyState, errorPage, feeNotice, formField, label, money,
-  page, pagination, receipt, rejectionSlip, repoHeader, statusWord, userLink, when,
+  page, pagination, repoHeader, statusWord, userLink, when,
 } from './layout';
 
 // Date.now() is 0 at module scope in Workers, so `now` is set per request.
@@ -109,7 +109,7 @@ preview.get('/__preview', c => {
     ${pagination({ page: 2, hasNext: true, base: `${base}/commits/main` })}
 
     <h2>Issues</h2>
-    <div class="list-filters"><a href="#" aria-current="page">Open (6)</a><a href="#">Closed (1)</a><span class="spacer"></span>${confirmForm('#', 'New issue', { confirm: 'Lodge a new issue?', fee: 'issue_file', size: 'small' })}</div>
+    <div class="list-filters"><a href="#" aria-current="page">Open (6)</a><a href="#">Closed (1)</a><span class="spacer"></span>${confirmForm('#', 'New issue', { confirm: 'Open a new issue?', fee: 'issue_file', size: 'small' })}</div>
     <ul class="issue-list">
       <li class="issue-row">${statusWord('open', { issue: true })}<a class="title" href="#">The Issue</a><span class="meta">#1 opened 2019 by ${userLink('Kevin')} ${label('immutable')} ${label('wontfix')}</span><span class="side">412 comments</span></li>
       <li class="issue-row">${statusWord('open', { issue: true })}<a class="title" href="#">September totals do not balance</a><span class="meta">#6 opened ${when(now - 3 * day)} by ${userLink('alice')} ${label('bug')}</span><span class="side">3 comments</span></li>
@@ -159,11 +159,7 @@ preview.get('/__preview', c => {
     <p class="row wrap">${['open', 'pending', 'processing', 'approved', 'declined', 'rejected', 'executed', 'merged', 'processed', 'expired', 'withdrawn', 'closed'].map(st => statusWord(st))}</p>
 
     <h2>Flash messages</h2>
-    <p class="muted">With JavaScript these open as dialogs. Try <a href="?flash=Star%20request%20filed.%20Filing%20fee%20%240.99%20charged.">a receipt</a>, <a href="?flash=Error%3A%20Starring%20costs%20%240.99.%20Your%20balance%20is%20insufficient.">a rejection notice</a> or <a href="?flash=Saved.">a plain message</a>.</p>
-    <div class="row wrap" style="align-items: flex-start">
-      ${receipt('Fork request filed. Filing fee $1.49 charged. Execution fee $2.99 charged.', { now, number: 'R004821937' })}
-      ${rejectionSlip('Starring costs $0.99. Your balance is insufficient.', { now, reference: 'SG-RJ-104233' })}
-    </div>
+    <p class="muted">With JavaScript these open as dialogs. Try <a href="?flash=Error%3A%20Starring%20this%20repository%20requires%20an%20approved%20star%20request.">an error</a> or <a href="?flash=Star%20request%20filed.%20Filing%20fee%3A%20%240.99.">a message</a>.</p>
 
     <h2>Fee schedule</h2>
     <table class="fee-table"><thead><tr><th>Fee</th><th class="amount">Amount</th></tr></thead><tbody>
@@ -171,14 +167,14 @@ preview.get('/__preview', c => {
     </tbody></table>
 
     <h2>Forms</h2>
-    ${card('Request', html`<form method="post" action="#" data-form="SG-RQ1">
+    ${card('Request', html`<form method="post" action="#">
       ${feeNotice(['pull_file'])}
       ${formField({ label: 'Request type', name: 'kind', type: 'select', options: ['Pull request', 'Push request', 'Fork request', 'Star request'] })}
       ${formField({ label: 'Reason', name: 'reason', type: 'textarea', rows: 3, required: true, hint: 'Required. Requests without a reason are declined.' })}
       ${formField({ label: 'I accept the fees', name: 'accept', type: 'checkbox' })}
-      <div class="form-actions">${button('Lodge request')}</div>
+      <div class="form-actions">${button('File request')}</div>
     </form>`)}
-    ${card('New repository', html`<form class="form" method="post" action="#" data-form="SG-NR1" data-confirm="Create this repository?" data-fee="${money(FEES.repo_create.amount)}">
+    ${card('New repository', html`<form class="form" method="post" action="#" data-confirm="Create this repository?" data-fee="${money(FEES.repo_create.amount)}">
       ${feeNotice(['repo_create'])}
       <label>Repository name<input name="name" required maxlength="64"></label>
       <div class="split"><label>Default branch<input name="branch" value="main"></label><label>Visibility<select name="v"><option>Public</option></select></label></div>

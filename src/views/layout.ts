@@ -169,113 +169,25 @@ export function confirmForm(action: string, text: string, opts: { confirm: strin
   return html`<form class="inline" method="post" action="${action}" data-confirm="${opts.confirm}"${fees.length ? html` data-fee="${money(total)}"` : ''}>${Object.entries(opts.hidden ?? {}).map(([k, v]) => html`<input type="hidden" name="${k}" value="${v}">`)}${button(text, { size: opts.size })}</form>`;
 }
 
-// ── Flash messages: receipts, rejection slips, plain notices ────────────
+// ── Flash messages ───────────────────────────────────────────────────────
 //
-// Routes redirect with a flash string. "Error: …" becomes a rejection notice (the prefix is dropped),
-// anything with a dollar amount becomes a plain-text receipt, anything else a plain notice. The server
-// renders the full slip or receipt in #flash (visible without JavaScript); forge.js shows a copy of
-// it in a dialog.
+// Routes redirect with a flash string. "Error: …" is an error (the prefix is dropped); anything else
+// is a plain message. The server renders it in #flash (visible without JavaScript); forge.js shows it
+// in a dialog with OK.
 
-const AEST = 10 * 3600000;
-const pad = (n: number, width = 2) => String(n).padStart(width, '0');
-/** "15/10/2026" and "2:03:41 pm AEST" for a moment, in AEST (UTC+10, no daylight saving). */
-export function aestParts(ms: number): { date: string; time: string } {
-  const t = new Date(ms + AEST);
-  const h = t.getUTCHours();
-  return {
-    date: `${pad(t.getUTCDate())}/${pad(t.getUTCMonth() + 1)}/${t.getUTCFullYear()}`,
-    time: `${h % 12 || 12}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())} ${h < 12 ? 'am' : 'pm'} AEST`,
-  };
-}
-
-const digits = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join('');
-const AMOUNT = /(-?)\$(\d[\d,]*(?:\.\d{1,2})?)/g;
-const cents = (sign: string, amount: string) => Math.round(parseFloat(amount.replace(/,/g, '')) * 100) * (sign ? -1 : 1);
-
-export type FlashKind = 'error' | 'receipt' | 'plain';
+export type FlashKind = 'error' | 'plain';
 export interface FlashInput { message: string; error?: boolean }
 
-/** Which way a flash message is shown, and its text without an "Error: " prefix. */
+/** Whether a flash message is an error, and its text without an "Error: " prefix. */
 export function flashKind(flash: FlashInput): { kind: FlashKind; text: string } {
   if (flash.message.startsWith('Error: ')) return { kind: 'error', text: flash.message.slice(7).trim() };
-  if (flash.error) return { kind: 'error', text: flash.message };
-  AMOUNT.lastIndex = 0;
-  if (AMOUNT.test(flash.message)) return { kind: 'receipt', text: flash.message };
-  return { kind: 'plain', text: flash.message };
+  return { kind: flash.error ? 'error' : 'plain', text: flash.message };
 }
 
-/** The receipt's line items: one per sentence, with the sentence's dollar amounts added up on the right. */
-export function receiptLines(text: string): { lines: Array<{ text: string; cents: number | null }>; total: number } {
-  const sentences = text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
-  let total = 0;
-  const lines = sentences.map(sentence => {
-    let sum: number | null = null;
-    for (const m of sentence.matchAll(AMOUNT)) sum = (sum ?? 0) + cents(m[1], m[2]);
-    if (sum != null) total += sum;
-    return { text: sentence, cents: sum };
-  });
-  return { lines, total };
-}
-
-const RECEIPT_WIDTH = 34;
-const RULE = '-'.repeat(RECEIPT_WIDTH);
-/** Wraps text to the receipt width; the amount, if any, goes at the right of the last line. */
-function receiptRow(text: string, amount = ''): string {
-  const words = text.split(/\s+/).filter(Boolean);
-  const rows: string[] = [];
-  let row = '';
-  for (const word of words) {
-    if (row && (row + ' ' + word).length > RECEIPT_WIDTH) { rows.push(row); row = word; }
-    else row = row ? `${row} ${word}` : word;
-  }
-  if (row) rows.push(row);
-  if (amount) {
-    const last = rows.pop() ?? '';
-    if (last.length + 1 + amount.length > RECEIPT_WIDTH) rows.push(last, amount.padStart(RECEIPT_WIDTH));
-    else rows.push(last + amount.padStart(RECEIPT_WIDTH - last.length));
-  }
-  return rows.join('\n');
-}
-
-/** A receipt as plain monospace text with dashed rules. `now` and `number` are for the preview. */
-export function receipt(text: string, opts: { now?: number; number?: string } = {}) {
-  const { date, time } = aestParts(opts.now ?? Date.now());
-  const { lines, total } = receiptLines(text);
-  const body = [
-    'SOUTHBAG GIT',
-    'TAX INVOICE / RECEIPT',
-    RULE,
-    `Receipt no: ${opts.number ?? `R${digits(9)}`}`,
-    `Date: ${date}`,
-    `Time: ${time}`,
-    RULE,
-    ...lines.map(l => receiptRow(l.text, l.cents == null ? '' : money(l.cents))),
-    RULE,
-    receiptRow('TOTAL', money(total)),
-    receiptRow('GST included', money(Math.round(total / 11))),
-    RULE,
-    receiptRow('Please retain this receipt for your records.'),
-  ].join('\n');
-  return html`<pre class="receipt">${body}</pre>`;
-}
-
-/** A rejection notice: NOTICE, reference number, date and time, the message. Unstyled. */
-export function rejectionSlip(text: string, opts: { now?: number; reference?: string } = {}) {
-  const { date, time } = aestParts(opts.now ?? Date.now());
-  return html`<div class="slip raw">
-    <h3>NOTICE</h3>
-    <p>Reference: ${opts.reference ?? `SG-RJ-${digits(6)}`}<br>Issued: ${date} ${time}</p>
-    <hr>
-    <p><b>${text}</b></p>
-    <p><small>This notice was issued automatically. Quote the reference number in any correspondence.</small></p>
-  </div>`;
-}
-
-/** #flash: the slip, receipt or notice. forge.js turns it into a dialog. */
+/** #flash. forge.js turns it into a dialog. */
 export function flashView(flash: FlashInput) {
   const { kind, text } = flashKind(flash);
-  const content = kind === 'error' ? rejectionSlip(text) : kind === 'receipt' ? receipt(text) : text;
-  return html`<div id="flash" class="flash flash-${kind}${kind === 'plain' ? ' notice' : ''}" role="${kind === 'error' ? 'alert' : 'status'}" data-flash="${kind}" data-message="${text}"${kind === 'error' ? raw(' data-error') : ''}>${content}</div>`;
+  return html`<div id="flash" class="flash flash-${kind} notice" role="${kind === 'error' ? 'alert' : 'status'}" data-flash="${kind}" data-message="${text}"${kind === 'error' ? raw(' data-error') : ''}>${text}</div>`;
 }
 
 // ── Page shell ───────────────────────────────────────────────────────────
@@ -377,7 +289,7 @@ function trail(path: string | undefined) {
 function footer(now: number, balanceNote?: string) {
   // A visitor counter. It goes up about once every nine seconds.
   const visitors = String(Math.floor((now - 1704067200000) / 9000)).padStart(8, '0');
-  const year = new Date(now + AEST).getUTCFullYear();
+  const year = new Date(now + 10 * 3600000).getUTCFullYear();
   return html`<footer class="site-footer"><div class="inner">
     <div class="raw footer-raw">
       <h3>Business hours</h3>

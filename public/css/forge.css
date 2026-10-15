@@ -224,16 +224,9 @@ a.sha { text-decoration: underline; }
 .pagination .page { font-size: 0.85rem; color: var(--sb-muted); }
 .pagination .disabled { color: #c4c2bc; cursor: default; animation: none; }
 
-/* ── Flash: receipt, rejection slip or notice (a dialog with JavaScript) ── */
+/* ── Flash (a dialog with JavaScript) ── */
 #flash { margin: 0 0 14px; }
 .js #flash { display: none; }
-/* The receipt is a <pre> of dashes; the rejection notice is unstyled (.raw). */
-pre.receipt { max-width: 34em; font-size: 0.8rem; line-height: 1.3; background: var(--sb-field); color: var(--sb-field-ink); border: 1px solid var(--sb-hairline); box-shadow: none; }
-.dialog pre.receipt { margin: 0; }
-
-/* ── Paper forms: <form data-form="SG-RQ1"> ─────────────────────────── */
-/* The form code printed small above the form. Nothing else. */
-form[data-form]::before { content: 'Form ' attr(data-form); display: block; font-size: 0.7rem; color: var(--sb-muted); text-shadow: none; margin: 0 0 4px; }
 
 /* ── Page vocabulary used by the route templates ────────────────────── */
 .page-title { font-size: clamp(2rem, 6vw, 3.6rem); transform: rotate(-1deg); transform-origin: left; max-width: 20ch; margin: 4px 0 12px; }

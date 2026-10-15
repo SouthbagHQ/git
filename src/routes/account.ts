@@ -40,7 +40,7 @@ app.get('/waivers', async c => {
         An application fee of ${money(FEES.waiver_apply.amount)} applies. An assessment fee of ${money(FEES.waiver_decline.amount)}
         applies to applications that are not approved.</p>
       ${user ? card('Apply for a fee waiver', html`
-        <form method="post" action="/waivers" class="form" data-form="SG-FW1" data-confirm="Apply for a fee waiver? The application fee is ${money(FEES.waiver_apply.amount)}.">
+        <form method="post" action="/waivers" class="form" data-confirm="Apply for a fee waiver? The application fee is ${money(FEES.waiver_apply.amount)}.">
           <label>Project name<input name="project" required maxlength="100"></label>
           <label>Licence
             <select name="licence">${LICENCES.map(l => html`<option>${l}</option>`)}</select></label>
@@ -54,7 +54,7 @@ app.get('/waivers', async c => {
         </form>`) : html`<p><a href="/auth/login?next=/waivers">Sign in</a> to apply.</p>`}
       ${user ? card('Your applications', waivers.length ? html`
         <table class="table">
-          <thead><tr><th>Project</th><th>Licence</th><th>Lodged</th><th>Status</th><th>Decision</th></tr></thead>
+          <thead><tr><th>Project</th><th>Licence</th><th>Submitted</th><th>Status</th><th>Decision</th></tr></thead>
           <tbody>${waivers.map(w => html`<tr>
             <td>${w.project}</td><td>${w.licence}</td><td>${dateTime(w.created_at)}</td>
             <td>${statusWord(w.status === 'pending' ? 'Under assessment' : 'Declined')}</td>
@@ -73,7 +73,7 @@ app.post('/waivers', async c => {
   if (!f.declare) fail(400, 'You must make the declaration.');
   const licence = LICENCES.includes(f.licence) ? f.licence : 'Other';
   await applyForWaiver(c.env, user, { project, licence, reason });
-  return redirect(c, '/waivers', `Application lodged. Application fee: ${money(FEES.waiver_apply.amount)}. You will be notified of the outcome.`);
+  return redirect(c, '/waivers', `Application submitted. Application fee: ${money(FEES.waiver_apply.amount)}. You will be notified of the outcome.`);
 });
 
 // ── Billing ──
@@ -114,14 +114,14 @@ app.get('/settings', c => {
     body: html`
       <h1 class="page-title">Settings</h1>
       ${card('Profile', html`
-        <form method="post" action="/settings/profile" class="form" data-form="SG-U1">
+        <form method="post" action="/settings/profile" class="form">
           <label>Display name<input name="name" value="${user.name}" maxlength="50"></label>
           <label>Bio<textarea name="bio" maxlength="300" rows="3">${user.bio}</textarea></label>
           <button class="btn" type="submit">Save</button>
         </form>`)}
       ${card('Username', html`
         <p>Your username is <strong>${user.username}</strong>. It was assigned when your account was opened.</p>
-        <form method="post" action="/settings/username" class="form" data-form="SG-U2" data-confirm="Change your username? The username change fee is ${money(FEES.username_change.amount)}.">
+        <form method="post" action="/settings/username" class="form" data-confirm="Change your username? The username change fee is ${money(FEES.username_change.amount)}.">
           <label>New username<input name="username" required pattern="[A-Za-z0-9-]{3,30}" maxlength="30"></label>
           <button class="btn" type="submit">Change username (${money(FEES.username_change.amount)})</button>
         </form>`)}
@@ -166,7 +166,7 @@ app.get('/settings/tokens', async c => {
       ${created ? card('New token', html`<p>Copy your token now. It will not be shown again.</p>
         <p><code class="token" data-copy>${created}</code></p>`) : ''}
       ${card('Issue a token', html`
-        <form method="post" action="/settings/tokens" class="form" data-form="SG-T1" data-confirm="Issue an access token? The access token issuance fee is ${money(FEES.token_create.amount)}.">
+        <form method="post" action="/settings/tokens" class="form" data-confirm="Issue an access token? The access token issuance fee is ${money(FEES.token_create.amount)}.">
           <label>Token name<input name="name" required maxlength="50"></label>
           <button class="btn" type="submit">Issue token (${money(FEES.token_create.amount)})</button>
         </form>`)}
@@ -236,7 +236,7 @@ app.get('/security', async c => {
         ${money(FEES.security_wrong.amount)} and starts again. The account review fee of ${money(FEES.fraud_review.amount)} applies
         when your account is unfrozen.</p>
       ${card(`Question ${user.security_streak + 1} of ${STREAK_NEEDED}`, html`
-        <form method="post" action="/security" class="form" data-form="SG-S7" autocomplete="off">
+        <form method="post" action="/security" class="form" autocomplete="off">
           <label>${question.text}<input name="answer" required maxlength="200" autocomplete="off"></label>
           <button class="btn" type="submit">Submit answer</button>
         </form>`)}
@@ -283,10 +283,9 @@ app.get('/requests', async c => {
         ? 'Southbag Git is currently in business hours.'
         : html`Southbag Git is currently outside business hours. Next opening: ${aestText(nextOpening(Date.now()))}.`}</p>
       ${card('File a request', html`
-        <form method="post" action="/requests" class="form" data-form="SG-RQ1"
-          data-confirm="Lodge this request? The filing fee for the selected request type applies.">
-          <p class="hint">Complete all fields. Incomplete forms are returned. One request per form.</p>
-          <label>Repository (owner/name, exactly as shown)<input name="repository" required maxlength="140" autocomplete="off" spellcheck="false"></label>
+        <form method="post" action="/requests" class="form"
+          data-confirm="File this request? The filing fee for the selected request type applies.">
+          <label>Repository (owner/name)<input name="repository" required maxlength="140" autocomplete="off" spellcheck="false"></label>
           <label>Request type
             <select name="kind" required>
               <option value="">Select</option>
@@ -298,11 +297,8 @@ app.get('/requests', async c => {
             </select></label>
           <label>Reason for request<textarea name="reason" required minlength="20" maxlength="1000" rows="4"></textarea></label>
           <p class="hint">At least 20 characters. Requests without a sufficient reason may be declined.</p>
-          <label>Reference number (if known)<input name="reference" maxlength="40"></label>
-          <label>Preferred contact time
-            <select name="contact"><option>Business hours</option><option>Business hours (morning)</option><option>Business hours (afternoon)</option></select></label>
-          <label class="check"><input type="checkbox" name="declare" required> I declare that this request is made in good faith and that I understand fees are final.</label>
-          <button class="btn" type="submit">Lodge request</button>
+          <label class="check"><input type="checkbox" name="declare" required> I understand that fees apply.</label>
+          <button class="btn" type="submit">File request</button>
         </form>`)}
       ${card('Awaiting your decision', table(inbox))}
       ${card('Filed by you', table(mine))}`,
@@ -314,16 +310,16 @@ app.post('/requests', async c => {
   const f = await form(c);
   const [owner, name, extra] = str(f.repository, 140).split('/');
   const repo = owner && name && extra === undefined ? await getRepo(c.env, owner, name) : null;
-  if (!repo) fail(404, 'Repository not found. Enter it as owner/name, exactly as shown.');
+  if (!repo) fail(404, 'Repository not found. Enter it as owner/name.');
   if (!KINDS.includes(f.kind as SimpleKind)) fail(400, 'Select a request type.');
   const kind = f.kind as SimpleKind;
   const reason = str(f.reason, 1000);
   if (reason.length < 20) fail(400, 'Give a reason of at least 20 characters.');
   if (mentionsBannedTopic(reason)) fail(400, 'Your reason refers to a topic that cannot be discussed.');
-  if (!f.declare) fail(400, 'You must make the declaration.');
+  if (!f.declare) fail(400, 'Confirm that you understand fees apply.');
   const request = await fileRequest(c.env, user, repo, kind, reason);
   return redirect(c, `${repoUrl(repo)}/requests/${kind}/${request.id}`,
-    `${KIND_LABEL[kind]} lodged for ${repo.owner}/${repo.name}. ${FEES[`${kind}_file`].label}: ${money(feeFor(kind, 'file').amount)}. The repository owner has been notified.`);
+    `${KIND_LABEL[kind]} filed for ${repo.owner}/${repo.name}. ${FEES[`${kind}_file`].label}: ${money(feeFor(kind, 'file').amount)}. The repository owner has been notified.`);
 });
 
 // ── Status and terms ──

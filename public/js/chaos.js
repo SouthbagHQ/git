@@ -10,13 +10,13 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, value); } catch {} },
 };
 
-// ── Cookie consent (Form SG-C1) ──────────────────────────────────────────
-// Once per browser. Every box is ticked and cannot be unticked. "Lodge consent" files it.
+// ── Cookie banner ────────────────────────────────────────────────────────
+// Once per browser. Every box is ticked and cannot be unticked.
 const cookies = [
   'Session', 'Sign-in state', 'Sign-in redirect', 'Security token', 'Request forgery protection',
   'Load balancing', 'Region routing', 'Cache variation', 'Feature flags', 'Gradual rollout',
   'Theme', 'Language', 'Locale', 'Time zone', 'Date format', 'Number format',
-  'Cookie consent lodged', 'Recently viewed repositories', 'Last branch', 'Diff view preference',
+  'Cookie consent', 'Recently viewed repositories', 'Last branch', 'Diff view preference',
   'Clone protocol', 'Fee estimate', 'Business hours notice', 'Unread counts', 'Printer-friendly version',
   'Analytics', 'Session replay', 'Performance', 'Error reporting', 'Web vitals', 'Page leave',
   'kevin_session', 'Bot protection', 'Rate limiting',
@@ -41,12 +41,11 @@ export function cookieConsent() {
     form.remove();
   };
   const row = name => h('label', h('input', { type: 'checkbox', checked: true, disabled: true }), ` ${name}`, h('br'));
-  const form = h('form.cookie-form.raw', { dataset: { form: 'SG-C1' }, 'aria-label': 'Cookie consent', onsubmit: e => { e.preventDefault(); close('lodged'); } },
-    h('b', 'Consent to cookies'),
+  const form = h('form.cookie-form.raw', { 'aria-label': 'Cookies', onsubmit: e => { e.preventDefault(); close('accepted'); } },
+    h('b', 'Cookies'),
     h('p', h('small', 'Southbag Git uses cookies. Some cannot be declined. Continued use constitutes acceptance.')),
-    h('fieldset', h('legend', 'Section A'), row('Strictly necessary'), row('Functional'), row('Performance'), row('Analytics')),
-    h('fieldset', h('legend', 'Section B'), row('I have read the Terms')),
-    h('button', { type: 'submit' }, 'Lodge consent'), ' ',
+    row('Strictly necessary'), row('Functional'), row('Performance'), row('Analytics'),
+    h('button', { type: 'submit' }, 'Accept'), ' ',
     h('a', { href: '#', onclick: async e => { e.preventDefault(); await cookiePreferences(); close('managed'); } }, 'Manage preferences'));
   setTimeout(() => document.body.append(form), 2500);
 }

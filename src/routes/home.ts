@@ -112,7 +112,7 @@ app.get('/repo/new', c => {
     body: html`
       <h1 class="page-title">New repository</h1>
       ${card('Repository details', html`
-        <form method="post" action="/repo/new" class="form" data-form="SG-R1" data-confirm="Create this repository? The repository establishment fee is ${money(FEES.repo_create.amount)}.">
+        <form method="post" action="/repo/new" class="form" data-confirm="Create this repository? The repository establishment fee is ${money(FEES.repo_create.amount)}.">
           <label>Owner<select name="owner"><option>${user.username}</option></select></label>
           <label>Repository name<input name="name" required maxlength="64" pattern="[A-Za-z0-9._-]+"></label>
           <label>Description<input name="description" maxlength="250"></label>

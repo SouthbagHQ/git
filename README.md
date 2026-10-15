@@ -15,8 +15,7 @@ the other Southbag products ([Social](../social), [Identity](../identity), [Bank
 - **Push requests** give permission to run `git push` once.
 - **Merge requests** are what other forges call pull requests.
 - **Fork requests**, **star requests** and **unstar requests**: approved, then executed with a button.
-- **Requests are filed from one place**, the `/requests` page (Form SG-RQ1: type the repository as
-  `owner/name`). The repository's own Requests tab only lists them.
+- **Requests are filed from one place**, the `/requests` page (type the repository as `owner/name`). The repository's own Requests tab only lists them.
 - The ordinary **Watch, Star, Fork and Download ZIP buttons** are still there. Pressing one charges
   the unrequested action fee and shows an error saying an approved request is required.
 - Approved pull and push requests are good for one use within 24 hours.

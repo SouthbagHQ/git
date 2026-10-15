@@ -92,7 +92,7 @@ app.get('/:owner/:repo/merge-requests/new', async c => {
     body: html`
       ${await header(c, repo, 'merge')}
       ${card('New merge request', targets.length ? html`
-        <form method="post" action="${repoUrl(repo)}/merge-requests/new" class="form" data-form="SG-M1" data-confirm="File this merge request? The merge request filing fee is ${money(FEES.merge_file.amount)}.">
+        <form method="post" action="${repoUrl(repo)}/merge-requests/new" class="form" data-confirm="File this merge request? The merge request filing fee is ${money(FEES.merge_file.amount)}.">
           <div class="split">
             <label>Merge into<select name="target">${targets.map(b => html`<option ${b.name === repo.default_branch ? 'selected' : ''}>${b.name}</option>`)}</select></label>
             <label>From<select name="source">${options.map(o => html`<option value="${o.value}">${o.label}</option>`)}</select></label>

@@ -3,9 +3,8 @@
 // dialogs and the house jank runs.
 //
 //   <form data-confirm="Request a star for alice/notes?" data-fee="$0.99">  two dialogs, then submits
-//   <div id="flash" data-flash="plain|receipt|error" data-message="Saved.">     shown as a dialog with OK (receipt and
+//   <div id="flash" data-flash="plain|error" data-message="Saved.">     shown as a dialog with OK
 //                                                                            rejection notice: a copy of its contents)
-//   <form data-form="SG-RQ1">                                                the form code, printed small (CSS)
 //   <button data-copy="#clone-url">Copy</button>                              copies an input's value; <code data-copy> copies its own text
 //   <button data-refuse-delete>Delete</button>                                refuses (no deleting on Southbag Git)
 //   <details class="menu-details"> … <input data-filter> … </details>        menus close when you click away; filter narrows links
@@ -107,15 +106,10 @@ document.addEventListener('input', e => {
 });
 
 // ── Flash ─────────────────────────────────────────────────────────────────
-// The server renders the message in #flash: a plain notice, a receipt (<pre>) or a rejection notice.
+// The server renders the message in #flash; it opens as a dialog with OK.
 function showFlash() {
   const flash = document.getElementById('flash');
   if (!flash?.dataset.message) return;
-  const kind = flash.dataset.flash;
-  if ((kind === 'receipt' || kind === 'error') && flash.firstElementChild) {
-    dialog({ title: kind === 'receipt' ? 'Receipt' : 'Southbag Git', body: flash.firstElementChild.cloneNode(true) });
-    return;
-  }
   toast(flash.dataset.message, { error: flash.hasAttribute('data-error') });
 }
 
