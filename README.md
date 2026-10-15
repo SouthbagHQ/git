@@ -9,8 +9,10 @@ the other Southbag products ([Social](../social), [Identity](../identity), [Bank
 
 ## What's different
 
-- **Cloning** needs no request, only the clone fee. **Pull requests** give permission to run
-  `git pull` / `fetch` once after that. Without an approved one, git prints
+- **Cloning** a repository for the first time needs no request, only the clone fee. **Pull
+  requests** give permission to run `git pull` / `fetch` (or clone again) once after that. The
+  request is used as soon as git asks for the branch list, so a pull that is already up to date
+  still uses one. Without an approved one, git prints
   `fatal: remote error: You need an approved pull request…`.
 - **Push requests** give permission to run `git push` once.
 - **Merge requests** are what other forges call pull requests.

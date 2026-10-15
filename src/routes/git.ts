@@ -12,7 +12,7 @@
 
 import { Hono, type Context } from 'hono';
 import type { AppEnv, Env, Repo, User } from '../env';
-import { beforeFetch, beforePush, gitAuthenticate, reviewPush } from '../lib/policy';
+import { beforeFetch, beforeListRefs, beforePush, gitAuthenticate, reviewPush } from '../lib/policy';
 import {
   advertiseRefs,
   errorAdvertisement,
@@ -61,6 +61,7 @@ function policyFor(c: C, user: User, repo: Repo): GitPolicy {
   if (devPolicyOff(c)) {
     // DEV ONLY: allow everything and move refs ourselves.
     return {
+      beforeListRefs: async () => ({ ok: true }),
       beforeFetch: async () => ({ ok: true }),
       beforePush: async () => ({ ok: true }),
       reviewPush: async () => ({ results: {}, messages: ['Southbag Git (dev): policy is off; refs updated directly.'] }),
@@ -68,7 +69,8 @@ function policyFor(c: C, user: User, repo: Repo): GitPolicy {
     };
   }
   return {
-    beforeFetch: ({ clone }) => beforeFetch(c.env, c.executionCtx, user, repo, { clone }),
+    beforeListRefs: () => beforeListRefs(c.env, user, repo),
+    beforeFetch: () => beforeFetch(c.env, c.executionCtx, user, repo),
     beforePush: () => beforePush(c.env, user, repo),
     reviewPush: (analyses) => reviewPush(c.env, c.executionCtx, user, repo, analyses),
   };
@@ -113,10 +115,9 @@ git.get('/:owner/:repo/info/refs', async (c) => {
   const s = await setup(c);
   if (s instanceof Response) return s;
   const type = `application/x-${service}-advertisement`;
-  if (service === 'git-receive-pack') {
-    const verdict = await policyFor(c, s.user, s.repo).beforePush();
-    if (!verdict.ok) return respond(errorAdvertisement(service as Service, verdict.message), type);
-  }
+  const policy = policyFor(c, s.user, s.repo);
+  const verdict = await (service === 'git-receive-pack' ? policy.beforePush() : policy.beforeListRefs());
+  if (!verdict.ok) return respond(errorAdvertisement(service as Service, verdict.message), type);
   const store = new ObjectStore(c.env, s.repo.network_id);
   return respond(await advertiseRefs(c.env, s.repo, service, store), type);
 });
