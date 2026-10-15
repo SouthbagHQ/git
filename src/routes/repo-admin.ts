@@ -22,6 +22,8 @@ app.get('/:owner/:repo/pushes', async c => {
     .all<{ id: string; username: string; status: string; updates: string; commits: number; after_hours: number; reason: string | null; due_at: number; created_at: number; processed_at: number | null }>();
   const now = Date.now();
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `Push queue - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user: c.get('user'),
@@ -55,6 +57,8 @@ app.get('/:owner/:repo/settings', async c => {
   if (user.id !== repo.owner_id) fail(403, 'Only the repository owner can change settings.');
   const branches = await listVisibleBranches(c.env, repo);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `Settings - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user,
@@ -62,7 +66,7 @@ app.get('/:owner/:repo/settings', async c => {
     body: html`
       ${await header(c, repo, 'settings')}
       ${card('Repository', html`
-        <form method="post" action="${repoUrl(repo)}/settings" class="form">
+        <form method="post" action="${repoUrl(repo)}/settings" class="form" data-form="SG-R4">
           <label>Description<input name="description" value="${repo.description}" maxlength="250"></label>
           <label>Default branch<select name="branch">${branches.length ? branches.map(b => html`<option ${b.name === repo.default_branch ? 'selected' : ''}>${b.name}</option>`)
             : html`<option>${repo.default_branch}</option>`}</select></label>

@@ -5,7 +5,6 @@ import type { Env, Repo, User } from '../env';
 import { chargeFee, FEES, money } from './fees';
 import { hasApproved, consumeApproved } from './requests';
 import { reviewPush as review } from './pushes';
-import { repoUrl } from './repos';
 import { userFromBasicAuth } from './tokens';
 
 const site = 'https://git.southbag.cc';
@@ -66,7 +65,7 @@ export async function beforeFetch(env: Env, _ctx: Waiter, user: User, repo: Repo
     return { ok: true };
   }
   if (!await consumeApproved(env, user, repo, 'pull'))
-    return { ok: false, message: `You need an approved pull request to pull from ${repo.owner}/${repo.name}. File one at ${site}${repoUrl(repo)}/requests/pull` };
+    return { ok: false, message: `You need an approved pull request to pull from ${repo.owner}/${repo.name}. File one at ${site}/requests` };
   await chargeFee(env, user, 'pull_execute', `${repo.owner}/${repo.name}`);
   return { ok: true };
 }
@@ -78,7 +77,7 @@ export const fetchNote = `Pull request used. ${FEES.pull_execute.label}: ${money
 export async function beforePush(env: Env, user: User, repo: Repo): Promise<Verdict> {
   if (user.frozen) return frozen;
   if (!await hasApproved(env, user, repo, 'push'))
-    return { ok: false, message: `You need an approved push request to push to ${repo.owner}/${repo.name}. File one at ${site}${repoUrl(repo)}/requests/push` };
+    return { ok: false, message: `You need an approved push request to push to ${repo.owner}/${repo.name}. File one at ${site}/requests` };
   return { ok: true };
 }
 

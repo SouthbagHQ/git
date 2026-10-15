@@ -36,7 +36,7 @@ export async function reviewPush(env: Env, _ctx: Waiter, user: User, repo: Repo,
   const requestId = await consumeApproved(env, user, repo, 'push');
   if (!requestId) {
     refuseAll('no approved push request');
-    messages.push(`File a push request at https://git.southbag.cc${repoUrl(repo)}/requests/push and wait for approval.`);
+    messages.push(`File a push request at https://git.southbag.cc/requests and wait for approval.`);
     return { results, messages };
   }
   // The request is used either way, and executing it is charged either way.

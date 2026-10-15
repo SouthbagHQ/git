@@ -55,6 +55,8 @@ app.get('/:owner/:repo/merge-requests', async c => {
   const { results } = await c.env.DB.prepare(`${mergeSelect} WHERE merge_requests.repo_id = ? AND merge_requests.status ${state === 'open'
     ? "IN ('open', 'approved')" : "IN ('merged', 'closed')"} ORDER BY merge_requests.number DESC LIMIT 100`).bind(repo.id).all<MergeRow>();
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `Merge requests - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user: c.get('user'),
@@ -81,6 +83,8 @@ app.get('/:owner/:repo/merge-requests/new', async c => {
   const options = (await Promise.all(sources.map(async s => (await listVisibleBranches(c.env, s)).map(b => ({ value: `${s.id}:${b.name}`, label: `${s.owner}/${s.name}: ${b.name}` }))))).flat();
   const targets = await listVisibleBranches(c.env, repo);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `New merge request - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user,
@@ -88,7 +92,7 @@ app.get('/:owner/:repo/merge-requests/new', async c => {
     body: html`
       ${await header(c, repo, 'merge')}
       ${card('New merge request', targets.length ? html`
-        <form method="post" action="${repoUrl(repo)}/merge-requests/new" class="form" data-confirm="File this merge request? The merge request filing fee is ${money(FEES.merge_file.amount)}.">
+        <form method="post" action="${repoUrl(repo)}/merge-requests/new" class="form" data-form="SG-M1" data-confirm="File this merge request? The merge request filing fee is ${money(FEES.merge_file.amount)}.">
           <div class="split">
             <label>Merge into<select name="target">${targets.map(b => html`<option ${b.name === repo.default_branch ? 'selected' : ''}>${b.name}</option>`)}</select></label>
             <label>From<select name="source">${options.map(o => html`<option value="${o.value}">${o.label}</option>`)}</select></label>
@@ -151,6 +155,8 @@ app.get('/:owner/:repo/merge-requests/:number', async c => {
     <form method="post" action="${repoUrl(repo)}/merge-requests/${mr.number}/${path}" class="form-inline" data-confirm="${confirm}">
       <button class="btn" type="submit">${label}</button></form>`;
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `${mr.title} - ${repo.owner}/${repo.name}`,
     user,
     flash: c.get('flash'),

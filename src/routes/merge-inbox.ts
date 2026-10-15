@@ -50,6 +50,7 @@ app.get('/merge-requests', async c => {
     user,
     flash: c.get('flash'),
     path: c.req.path,
+    unread: c.get('unread'),
     body: html`<h1 class="page-title">Merge requests</h1>
       ${card('On your repositories', table((waiting.results ?? []) as InboxRow[], 'No open merge requests on your repositories.'))}
       ${card('Filed by you', table((mine.results ?? []) as InboxRow[], 'No merge requests.'))}`,

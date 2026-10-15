@@ -19,10 +19,7 @@ export async function header(c: Ctx, repo: Repo, active: Tab) {
   const counts = await c.env.DB.prepare(`SELECT
       (SELECT COUNT(*) FROM issues WHERE repo_id = ?1 AND state = 'open') AS issues,
       (SELECT COUNT(*) FROM merge_requests WHERE repo_id = ?1 AND status IN ('open', 'approved')) AS merge,
-      (SELECT COUNT(*) FROM requests WHERE repo_id = ?1 AND kind = 'pull' AND status = 'open') AS pull,
-      (SELECT COUNT(*) FROM requests WHERE repo_id = ?1 AND kind = 'push' AND status = 'open') AS push,
-      (SELECT COUNT(*) FROM requests WHERE repo_id = ?1 AND kind = 'fork' AND status = 'open') AS fork,
-      (SELECT COUNT(*) FROM requests WHERE repo_id = ?1 AND kind IN ('star', 'unstar') AND status = 'open') AS star,
+      (SELECT COUNT(*) FROM requests WHERE repo_id = ?1 AND status = 'open') AS requests,
       (SELECT COUNT(*) FROM pushes WHERE repo_id = ?1 AND status = 'pending') AS pushes`)
     .bind(repo.id).first<Record<string, number>>();
   const starred = user ? Boolean(await c.env.DB.prepare('SELECT 1 FROM stars WHERE user_id = ? AND repo_id = ?').bind(user.id, repo.id).first()) : false;

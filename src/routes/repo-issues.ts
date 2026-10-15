@@ -52,7 +52,7 @@ export async function postComment(c: Ctx, repo: Repo, number: number, authorId: 
 }
 
 export const commentForm = (action: string) => html`
-  <form method="post" action="${action}" class="form comment-form">
+  <form method="post" action="${action}" class="form comment-form" data-form="SG-C2">
     <label>Comment<textarea name="body" required maxlength="10000" rows="5"></textarea></label>
     <button class="btn" type="submit">Comment (${money(FEES.comment.amount)})</button>
   </form>`;
@@ -78,6 +78,8 @@ app.get('/:owner/:repo/issues', async c => {
   const { results } = await c.env.DB.prepare(`${issueSelect} WHERE issues.repo_id = ? AND issues.state = ? ORDER BY issues.number DESC LIMIT 100`)
     .bind(repo.id, state).all<IssueRow>();
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `Issues - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user: c.get('user'),
@@ -99,6 +101,8 @@ app.get('/:owner/:repo/issues/new', async c => {
   const user = requireActiveUser(c);
   const repo = await loadRepo(c);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `New issue - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user,
@@ -106,7 +110,7 @@ app.get('/:owner/:repo/issues/new', async c => {
     body: html`
       ${await header(c, repo, 'issues')}
       ${card('New issue', html`
-        <form method="post" action="${repoUrl(repo)}/issues/new" class="form" data-confirm="Lodge this issue? The issue lodgement fee is ${money(FEES.issue_file.amount)}.">
+        <form method="post" action="${repoUrl(repo)}/issues/new" class="form" data-form="SG-I1" data-confirm="Lodge this issue? The issue lodgement fee is ${money(FEES.issue_file.amount)}.">
           <label>Title<input name="title" required maxlength="200"></label>
           <label>Description<textarea name="body" maxlength="20000" rows="10"></textarea></label>
           <button class="btn" type="submit">Lodge issue (${money(FEES.issue_file.amount)})</button>
@@ -139,6 +143,8 @@ app.get('/:owner/:repo/issues/:number', async c => {
   const thread = issue.immutable ? [] : await comments(c, repo, issue.number);
   const canClose = user && !issue.immutable && (user.id === repo.owner_id || user.id === issue.author_id);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `${issue.title} - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user,

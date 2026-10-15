@@ -39,6 +39,7 @@ export const FEES = {
   unstar_approve: { amount: 49, label: 'Unstar request approval fee' },
   unstar_execute: { amount: 250, label: 'Star removal fee' },
   // Everything else.
+  unrequested_action: { amount: 150, label: 'Unrequested action fee' },
   request_decline: { amount: 150, label: 'Declined request processing fee' },
   request_withdraw: { amount: 100, label: 'Request withdrawal fee' },
   repo_create: { amount: 1000, label: 'Repository establishment fee' },

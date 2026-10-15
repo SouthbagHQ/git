@@ -42,6 +42,7 @@ async function repoPage(c: Ctx, repo: Repo, tab: Tab, title: string, body: Child
     flash: c.get('flash'),
     layout: 'wide',
     path: c.req.path,
+    unread: c.get('unread'),
     body: html`${await header(c, repo, tab)}${body}`,
   }));
 }

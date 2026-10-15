@@ -40,5 +40,5 @@ export interface Repo {
   updated_at: number;
 }
 
-export type AppEnv = { Bindings: Env; Variables: { user: User | null; flash: string | null } };
+export type AppEnv = { Bindings: Env; Variables: { user: User | null; flash: string | null; unread: number } };
 export type Ctx = Context<AppEnv>;

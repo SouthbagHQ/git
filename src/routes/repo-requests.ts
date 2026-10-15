@@ -1,12 +1,13 @@
-// /:owner/:repo/requests/:kind — pull, push, fork, star and unstar requests.
+// /:owner/:repo/requests — pull, push, fork, star and unstar requests on one repository, and the
+// buttons (Star, Fork, Watch, Download ZIP) that refuse to work without one.
 
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import type { AppEnv } from '../env';
-import { FEES, feeFor, money } from '../lib/fees';
+import { FEES, chargeFee, feeFor, money } from '../lib/fees';
 import { fail, form, redirect, requireActiveUser, str } from '../lib/http';
 import {
-  KIND_LABEL, KINDS, decideRequest, executeRequest, fileRequest, getRequest, requestSelect, withdrawRequest,
+  KIND_LABEL, KINDS, decideRequest, executeRequest, getRequest, requestSelect, withdrawRequest,
   type RequestRow, type SimpleKind,
 } from '../lib/requests';
 import { repoUrl } from '../lib/repos';
@@ -35,34 +36,25 @@ const feeLine = (kind: SimpleKind) =>
 
 const requestUrl = (repo: { owner: string; name: string }, r: Pick<RequestRow, 'kind' | 'id'>) => `${repoUrl(repo)}/requests/${r.kind}/${r.id}`;
 
-app.get('/:owner/:repo/requests/:kind', async c => {
+// The repository's requests, all kinds. Requests are filed from /requests (src/routes/account.ts), not here.
+app.get('/:owner/:repo/requests', async c => {
   const repo = await loadRepo(c);
-  const tabKind = kindParam(c.req.param('kind'));
-  const kinds: SimpleKind[] = tabKind === 'star' || tabKind === 'unstar' ? ['star', 'unstar'] : [tabKind];
   const status = c.req.query('status') === 'closed' ? 'closed' : 'open';
-  const { results } = await c.env.DB.prepare(`${requestSelect} WHERE requests.repo_id = ? AND requests.kind IN (${kinds.map(() => '?').join(', ')})
+  const { results } = await c.env.DB.prepare(`${requestSelect} WHERE requests.repo_id = ?
     AND requests.status ${status === 'open' ? "IN ('open', 'approved')" : "NOT IN ('open', 'approved')"} ORDER BY requests.created_at DESC LIMIT 100`)
-    .bind(repo.id, ...kinds).all<RequestRow>();
-  const user = c.get('user');
-  const label = tabKind === 'unstar' ? 'Star requests' : KIND_LABEL[tabKind] + 's';
+    .bind(repo.id).all<RequestRow>();
   return c.html(page({
-    title: `${label} - ${repo.owner}/${repo.name}`,
+    path: c.req.path,
+    unread: c.get('unread'),
+    title: `Requests - ${repo.owner}/${repo.name}`,
     layout: 'wide',
-    user,
+    user: c.get('user'),
     flash: c.get('flash'),
     body: html`
-      ${await header(c, repo, tabKind === 'unstar' ? 'star' : tabKind)}
-      <h2 class="page-title">${label}</h2>
-      ${kinds.map(k => html`<p>${EXPLAIN[k]} ${feeLine(k)}</p>`)}
-      ${tabKind === 'push' ? html`<p>Business hours: 9:00 to 17:00 AEST, Monday to Friday. ${isBusinessHours(Date.now()) ? 'Currently open.'
-        : `Currently closed. Next opening: ${aestText(nextOpening(Date.now()))}.`}</p>` : ''}
-      ${user ? card(`File a ${(tabKind === 'unstar' ? 'star' : tabKind)} request`, html`${kinds.map(k => html`
-        <form method="post" action="${repoUrl(repo)}/requests/${k}" class="form"
-          data-confirm="File a ${KIND_LABEL[k].toLowerCase()}? The filing fee is ${money(feeFor(k, 'file').amount)}.">
-          <label>Reason for request<textarea name="reason" required minlength="20" maxlength="1000" rows="3"></textarea></label>
-          <p class="hint">At least 20 characters. Requests without a sufficient reason may be declined.</p>
-          <button class="btn" type="submit">File ${KIND_LABEL[k].toLowerCase()} (${money(feeFor(k, 'file').amount)})</button>
-        </form>`)}`) : ''}
+      ${await header(c, repo, 'requests')}
+      <h2 class="page-title">Requests</h2>
+      ${KINDS.map(k => html`<p>${EXPLAIN[k]} ${feeLine(k)}</p>`)}
+      <p>Requests are filed from the Requests page.</p>
       <p class="tabs-small"><a href="?status=open" class="${status === 'open' ? 'current' : ''}">Open</a>
         <a href="?status=closed" class="${status === 'closed' ? 'current' : ''}">Closed</a></p>
       ${results.length ? html`<table class="table request-table">
@@ -74,17 +66,30 @@ app.get('/:owner/:repo/requests/:kind', async c => {
   }));
 });
 
-app.post('/:owner/:repo/requests/:kind', async c => {
-  const user = requireActiveUser(c);
+app.get('/:owner/:repo/requests/:kind', async c => {
   const repo = await loadRepo(c);
-  const kind = kindParam(c.req.param('kind'));
-  const reason = str((await form(c)).reason, 1000);
-  if (reason.length < 20) fail(400, 'Give a reason of at least 20 characters.');
-  if (mentionsBannedTopic(reason)) fail(400, 'Your reason refers to a topic that cannot be discussed.');
-  const request = await fileRequest(c.env, user, repo, kind, reason);
-  return redirect(c, requestUrl(repo, request),
-    `${KIND_LABEL[kind]} filed. Filing fee: ${money(feeFor(kind, 'file').amount)}. The repository owner has been notified.`);
+  kindParam(c.req.param('kind'));
+  return c.redirect(`${repoUrl(repo)}/requests`);
 });
+
+// The ordinary forge buttons. Without an approved request each of these is an unrequested action:
+// it is charged and refused.
+const UNREQUESTED: Record<string, string> = {
+  star: 'Starring this repository requires an approved star request.',
+  unstar: 'Removing your star requires an approved unstar request.',
+  fork: 'Forking this repository requires an approved fork request.',
+  watch: 'Watching is not available for this repository. Kevin is already watching it.',
+  archive: 'Downloading an archive of this repository requires an approved pull request, executed with git.',
+};
+
+for (const action of Object.keys(UNREQUESTED)) {
+  app.post(`/:owner/:repo/${action}`, async c => {
+    const user = requireActiveUser(c);
+    const repo = await loadRepo(c);
+    await chargeFee(c.env, user, 'unrequested_action', `${action} ${repo.owner}/${repo.name}`);
+    fail(403, `${UNREQUESTED[action]}${action === 'watch' ? '' : ' Requests are filed from the Requests page.'} ${FEES.unrequested_action.label}: ${money(FEES.unrequested_action.amount)}.`);
+  });
+}
 
 app.get('/:owner/:repo/requests/:kind/:id', async c => {
   const repo = await loadRepo(c);
@@ -100,12 +105,14 @@ app.get('/:owner/:repo/requests/:kind/:id', async c => {
     <form method="post" action="${requestUrl(repo, request)}/${path}" class="form-inline" data-confirm="${confirm}">
       <button class="btn" type="submit">${label}</button></form>`;
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: `${KIND_LABEL[kind]} - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user,
     flash: c.get('flash'),
     body: html`
-      ${await header(c, repo, kind === 'unstar' ? 'star' : kind)}
+      ${await header(c, repo, 'requests')}
       <h2 class="page-title">${KIND_LABEL[kind]} ${request.id.slice(-6).toUpperCase()}</h2>
       ${card('Details', html`<table class="table">
         <tr><th>Status</th><td>${statusWord(request.status)}</td></tr>

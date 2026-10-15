@@ -9,15 +9,20 @@ the other Southbag products ([Social](../social), [Identity](../identity), [Bank
 
 ## What's different
 
-- **Pull requests** give permission to run `git pull` / `fetch` / `clone` once. Without an approved
-  one, git prints `fatal: remote error: You need an approved pull request…`.
+- **Cloning** needs no request, only the clone fee. **Pull requests** give permission to run
+  `git pull` / `fetch` once after that. Without an approved one, git prints
+  `fatal: remote error: You need an approved pull request…`.
 - **Push requests** give permission to run `git push` once.
 - **Merge requests** are what other forges call pull requests.
 - **Fork requests**, **star requests** and **unstar requests**: approved, then executed with a button.
+- **Requests are filed from one place**, the `/requests` page (Form SG-RQ1: type the repository as
+  `owner/name`). The repository's own Requests tab only lists them.
+- The ordinary **Watch, Star, Fork and Download ZIP buttons** are still there. Pressing one charges
+  the unrequested action fee and shows an error saying an approved request is required.
 - Approved pull and push requests are good for one use within 24 hours.
 - **Fees** for filing, approving (charged to whoever approves) and executing every request, plus
   repositories, issues, comments, access tokens, username changes, declined and withdrawn requests,
-  after-hours pushes, merge conflicts and wrong security answers. See `src/lib/fees.ts` or `/fees`.
+  after-hours pushes, merge conflicts and wrong security answers. See `src/lib/fees.ts`. There is no fee schedule page.
 - **Fee waivers** "for open source projects" (`/waivers`): an application fee, a few minutes of
   assessment, then always declined with an assessment fee.
 - **Pushes are pending.** git reports success, but refs only move when the push is processed: a few

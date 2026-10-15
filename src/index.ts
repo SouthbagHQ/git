@@ -26,7 +26,7 @@ app.onError((error, c) => {
   if (c.req.method === 'POST') {
     const referer = c.req.header('referer');
     const back = referer && new URL(referer).origin === new URL(c.req.url).origin ? new URL(referer).pathname + new URL(referer).search : '/';
-    return redirect(c, back, message);
+    return redirect(c, back, `Error: ${message}`);
   }
   return c.html(errorPage(c.get('user') ?? null, status, message), status as 404);
 });
@@ -43,7 +43,10 @@ app.post('/auth/logout', c => logout(c.req.raw, c.env, c.executionCtx));
 
 // ── Pages ──
 app.use('*', async (c, next) => {
-  c.set('user', await session(c.req.raw, c.env));
+  const user = await session(c.req.raw, c.env);
+  c.set('user', user);
+  c.set('unread', user ? (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL')
+    .bind(user.id).first<{ n: number }>())?.n ?? 0 : 0);
   const flash = getCookie(c.req.raw, flashCookie);
   c.set('flash', flash ? decodeURIComponent(flash) : null);
   // Forms with a cookie session must come from this site.

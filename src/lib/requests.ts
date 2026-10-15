@@ -70,7 +70,7 @@ export async function fileRequest(env: Env, user: User, repo: Repo, kind: Simple
     .bind(id, repo.id, kind, user.id, reason, Date.now() + OPEN_VALID_MS, Date.now()).run();
   await chargeFee(env, user, `${kind}_file`, `${repo.owner}/${repo.name}`);
   await notify(env, repo.owner_id, `${user.username} filed a ${KIND_LABEL[kind].toLowerCase()} on ${repo.owner}/${repo.name}.`,
-    `${repoUrl(repo)}/requests/${kind}`);
+    `${repoUrl(repo)}/requests`);
   if (kind === 'star' || kind === 'unstar') await recordWebActivity(env, user, repo, kind);
   return (await getRequest(env, id))!;
 }

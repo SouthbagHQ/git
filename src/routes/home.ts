@@ -27,6 +27,8 @@ app.get('/', async c => {
   const user = c.get('user');
   if (!user) {
     return c.html(page({
+      path: c.req.path,
+      unread: c.get('unread'),
       title: 'Southbag Git',
       user,
       flash: c.get('flash') ?? (c.req.query('login_error') ? 'Sign-in failed. Please try again.' : null),
@@ -49,6 +51,8 @@ app.get('/', async c => {
   const { results: notes } = await c.env.DB.prepare('SELECT body, link, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 8')
     .bind(user.id).all<{ body: string; link: string | null; created_at: number }>();
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Dashboard',
     user,
     flash: c.get('flash'),
@@ -81,6 +85,8 @@ app.get('/explore', async c => {
   const { results: users } = await c.env.DB.prepare(`SELECT username, name FROM users WHERE id != 'kevin' ORDER BY created_at DESC LIMIT 20`)
     .all<{ username: string; name: string }>();
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Explore',
     user: c.get('user'),
     flash: c.get('flash'),
@@ -98,13 +104,15 @@ app.get('/explore', async c => {
 app.get('/repo/new', c => {
   const user = requireActiveUser(c);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'New repository',
     user,
     flash: c.get('flash'),
     body: html`
       <h1 class="page-title">New repository</h1>
       ${card('Repository details', html`
-        <form method="post" action="/repo/new" class="form" data-confirm="Create this repository? The repository establishment fee is ${money(FEES.repo_create.amount)}.">
+        <form method="post" action="/repo/new" class="form" data-form="SG-R1" data-confirm="Create this repository? The repository establishment fee is ${money(FEES.repo_create.amount)}.">
           <label>Owner<select name="owner"><option>${user.username}</option></select></label>
           <label>Repository name<input name="name" required maxlength="64" pattern="[A-Za-z0-9._-]+"></label>
           <label>Description<input name="description" maxlength="250"></label>
@@ -153,6 +161,8 @@ app.get('/:owner', async c => {
   const repos = await listRepos(c.env, 'repos.owner_id = ?', [profile.id], 'repos.updated_at DESC', 50);
   const starred = await listRepos(c.env, 'repos.id IN (SELECT repo_id FROM stars WHERE user_id = ?)', [profile.id], 'repos.stars DESC', 20);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: profile.username,
     user: c.get('user'),
     flash: c.get('flash'),

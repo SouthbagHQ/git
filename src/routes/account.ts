@@ -4,10 +4,13 @@
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import type { AppEnv } from '../env';
-import { FEES, chargeFee, money, type FeeKey } from '../lib/fees';
+import { FEES, chargeFee, money } from '../lib/fees';
 import { fail, form, redirect, requireActiveUser, requireUser, str } from '../lib/http';
 import { QUESTIONS, STREAK_NEEDED, answerQuestion } from '../lib/security';
-import { KIND_LABEL, requestSelect, type RequestRow } from '../lib/requests';
+import { KIND_LABEL, KINDS, fileRequest, requestSelect, type RequestRow, type SimpleKind } from '../lib/requests';
+import { feeFor } from '../lib/fees';
+import { getRepo, repoUrl } from '../lib/repos';
+import { mentionsBannedTopic } from '../lib/banned';
 import { TOKEN_DAYS, createToken } from '../lib/tokens';
 import { LICENCES, applyForWaiver } from '../lib/waivers';
 import { aestText, isBusinessHours, nextOpening } from '../lib/hours';
@@ -19,36 +22,6 @@ const app = new Hono<AppEnv>();
 const RESERVED = new Set(['repo', 'explore', 'fees', 'waivers', 'billing', 'settings', 'notifications', 'security', 'requests',
   'status', 'terms', 'auth', 'api', 'css', 'js', 'img', 'admin', 'floor-3', 'palantir.js']);
 
-const FEE_GROUPS: [string, FeeKey[]][] = [
-  ['Cloning and pull requests', ['clone', 'pull_file', 'pull_approve', 'pull_execute']],
-  ['Push requests', ['push_file', 'push_approve', 'push_execute', 'push_after_hours', 'push_rejected']],
-  ['Merge requests', ['merge_file', 'merge_approve', 'merge_execute', 'merge_conflict']],
-  ['Fork requests', ['fork_file', 'fork_approve', 'fork_execute']],
-  ['Star requests', ['star_file', 'star_approve', 'star_execute', 'unstar_file', 'unstar_approve', 'unstar_execute']],
-  ['Requests', ['request_decline', 'request_withdraw']],
-  ['Repositories and issues', ['repo_create', 'issue_file', 'comment']],
-  ['Account', ['token_create', 'username_change', 'fraud_review', 'security_wrong']],
-  ['Fee waivers', ['waiver_apply', 'waiver_decline']],
-];
-
-app.get('/fees', c => c.html(page({
-  title: 'Fee schedule',
-  user: c.get('user'),
-  flash: c.get('flash'),
-  body: html`
-    <h1 class="page-title">Fee schedule</h1>
-    <p>Fees are taken from your Southbag Online Banking account when they are incurred. Approval fees are charged to
-      whoever approves the request.</p>
-    <p>Business hours are 9:00 to 17:00 AEST, Monday to Friday. Pushes received outside business hours are processed on the
-      next business day and attract the after-hours push processing fee.</p>
-    ${FEE_GROUPS.map(([group, keys]) => card(group, html`
-      <table class="table fee-table">
-        <thead><tr><th>Fee</th><th>Amount</th></tr></thead>
-        <tbody>${keys.map(key => html`<tr><td>${FEES[key].label}</td><td>${money(FEES[key].amount)}</td></tr>`)}</tbody>
-      </table>`))}
-    <p>Open source projects may <a href="/waivers">apply for a fee waiver</a>.</p>`,
-})));
-
 // ── Fee waivers ──
 
 app.get('/waivers', async c => {
@@ -56,6 +29,8 @@ app.get('/waivers', async c => {
   const waivers = user ? (await c.env.DB.prepare('SELECT * FROM waivers WHERE user_id = ? ORDER BY created_at DESC LIMIT 50')
     .bind(user.id).all<{ id: string; project: string; licence: string; status: string; decision: string | null; created_at: number; decided_at: number | null }>()).results : [];
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Fee waivers',
     user,
     flash: c.get('flash'),
@@ -65,7 +40,7 @@ app.get('/waivers', async c => {
         An application fee of ${money(FEES.waiver_apply.amount)} applies. An assessment fee of ${money(FEES.waiver_decline.amount)}
         applies to applications that are not approved.</p>
       ${user ? card('Apply for a fee waiver', html`
-        <form method="post" action="/waivers" class="form" data-confirm="Apply for a fee waiver? The application fee is ${money(FEES.waiver_apply.amount)}.">
+        <form method="post" action="/waivers" class="form" data-form="SG-FW1" data-confirm="Apply for a fee waiver? The application fee is ${money(FEES.waiver_apply.amount)}.">
           <label>Project name<input name="project" required maxlength="100"></label>
           <label>Licence
             <select name="licence">${LICENCES.map(l => html`<option>${l}</option>`)}</select></label>
@@ -109,6 +84,8 @@ app.get('/billing', async c => {
     .bind(user.id).all<{ id: string; amount: number; description: string; status: string; created_at: number }>();
   const total = results.filter(r => r.status === 'charged').reduce((n, r) => n + r.amount, 0);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Billing',
     user,
     flash: c.get('flash'),
@@ -129,20 +106,22 @@ app.get('/billing', async c => {
 app.get('/settings', c => {
   const user = requireUser(c);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Settings',
     user,
     flash: c.get('flash') ?? (c.req.query('welcome') ? `Welcome to Southbag Git. Your username is ${user.username}.` : null),
     body: html`
       <h1 class="page-title">Settings</h1>
       ${card('Profile', html`
-        <form method="post" action="/settings/profile" class="form">
+        <form method="post" action="/settings/profile" class="form" data-form="SG-U1">
           <label>Display name<input name="name" value="${user.name}" maxlength="50"></label>
           <label>Bio<textarea name="bio" maxlength="300" rows="3">${user.bio}</textarea></label>
           <button class="btn" type="submit">Save</button>
         </form>`)}
       ${card('Username', html`
         <p>Your username is <strong>${user.username}</strong>. It was assigned when your account was opened.</p>
-        <form method="post" action="/settings/username" class="form" data-confirm="Change your username? The username change fee is ${money(FEES.username_change.amount)}.">
+        <form method="post" action="/settings/username" class="form" data-form="SG-U2" data-confirm="Change your username? The username change fee is ${money(FEES.username_change.amount)}.">
           <label>New username<input name="username" required pattern="[A-Za-z0-9-]{3,30}" maxlength="30"></label>
           <button class="btn" type="submit">Change username (${money(FEES.username_change.amount)})</button>
         </form>`)}
@@ -176,6 +155,8 @@ app.get('/settings/tokens', async c => {
     .bind(user.id).all<{ id: string; name: string; last_four: string; created_at: number; expires_at: number; last_used_at: number | null }>();
   const created = c.req.query('created') ? c.get('flash') : null;
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Access tokens',
     user,
     flash: created ? null : c.get('flash'),
@@ -185,7 +166,7 @@ app.get('/settings/tokens', async c => {
       ${created ? card('New token', html`<p>Copy your token now. It will not be shown again.</p>
         <p><code class="token" data-copy>${created}</code></p>`) : ''}
       ${card('Issue a token', html`
-        <form method="post" action="/settings/tokens" class="form" data-confirm="Issue an access token? The access token issuance fee is ${money(FEES.token_create.amount)}.">
+        <form method="post" action="/settings/tokens" class="form" data-form="SG-T1" data-confirm="Issue an access token? The access token issuance fee is ${money(FEES.token_create.amount)}.">
           <label>Token name<input name="name" required maxlength="50"></label>
           <button class="btn" type="submit">Issue token (${money(FEES.token_create.amount)})</button>
         </form>`)}
@@ -215,6 +196,8 @@ app.get('/notifications', async c => {
     .bind(user.id).all<{ id: string; body: string; link: string | null; read_at: number | null; created_at: number }>();
   await c.env.DB.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').bind(Date.now(), user.id).run();
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Notifications',
     user,
     flash: c.get('flash'),
@@ -231,6 +214,8 @@ app.get('/notifications', async c => {
 app.get('/security', async c => {
   const user = requireUser(c);
   if (!user.frozen) return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Account security', user, flash: c.get('flash'),
     body: html`<h1 class="page-title">Account security</h1><p>Your account is not frozen.</p>`,
   }));
@@ -238,6 +223,8 @@ app.get('/security', async c => {
     ORDER BY created_at DESC LIMIT 10`).bind(user.id).all<{ rule: string; detail: string; created_at: number }>()).results;
   const question = QUESTIONS[user.security_question ?? ''] ?? QUESTIONS.ceo;
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Account review',
     user,
     flash: c.get('flash'),
@@ -249,7 +236,7 @@ app.get('/security', async c => {
         ${money(FEES.security_wrong.amount)} and starts again. The account review fee of ${money(FEES.fraud_review.amount)} applies
         when your account is unfrozen.</p>
       ${card(`Question ${user.security_streak + 1} of ${STREAK_NEEDED}`, html`
-        <form method="post" action="/security" class="form" autocomplete="off">
+        <form method="post" action="/security" class="form" data-form="SG-S7" autocomplete="off">
           <label>${question.text}<input name="answer" required maxlength="200" autocomplete="off"></label>
           <button class="btn" type="submit">Submit answer</button>
         </form>`)}
@@ -285,6 +272,8 @@ app.get('/requests', async c => {
       <td>${r.requester}</td><td>${timeAgo(r.created_at)}</td><td>${statusWord(r.status)}</td></tr>`)}</tbody></table>`
     : emptyState('No requests.');
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Requests',
     user,
     flash: c.get('flash'),
@@ -293,9 +282,48 @@ app.get('/requests', async c => {
       <p>Business hours: 9:00 to 17:00 AEST, Monday to Friday. ${isBusinessHours(Date.now())
         ? 'Southbag Git is currently in business hours.'
         : html`Southbag Git is currently outside business hours. Next opening: ${aestText(nextOpening(Date.now()))}.`}</p>
+      ${card('File a request', html`
+        <form method="post" action="/requests" class="form" data-form="SG-RQ1"
+          data-confirm="Lodge this request? The filing fee for the selected request type applies.">
+          <p class="hint">Complete all fields. Incomplete forms are returned. One request per form.</p>
+          <label>Repository (owner/name, exactly as shown)<input name="repository" required maxlength="140" autocomplete="off" spellcheck="false"></label>
+          <label>Request type
+            <select name="kind" required>
+              <option value="">Select</option>
+              <option value="unstar">Unstar request (filing fee ${money(feeFor('unstar', 'file').amount)})</option>
+              <option value="fork">Fork request (filing fee ${money(feeFor('fork', 'file').amount)})</option>
+              <option value="push">Push request (filing fee ${money(feeFor('push', 'file').amount)})</option>
+              <option value="star">Star request (filing fee ${money(feeFor('star', 'file').amount)})</option>
+              <option value="pull">Pull request (filing fee ${money(feeFor('pull', 'file').amount)})</option>
+            </select></label>
+          <label>Reason for request<textarea name="reason" required minlength="20" maxlength="1000" rows="4"></textarea></label>
+          <p class="hint">At least 20 characters. Requests without a sufficient reason may be declined.</p>
+          <label>Reference number (if known)<input name="reference" maxlength="40"></label>
+          <label>Preferred contact time
+            <select name="contact"><option>Business hours</option><option>Business hours (morning)</option><option>Business hours (afternoon)</option></select></label>
+          <label class="check"><input type="checkbox" name="declare" required> I declare that this request is made in good faith and that I understand fees are final.</label>
+          <button class="btn" type="submit">Lodge request</button>
+        </form>`)}
       ${card('Awaiting your decision', table(inbox))}
       ${card('Filed by you', table(mine))}`,
   }));
+});
+
+app.post('/requests', async c => {
+  const user = requireActiveUser(c);
+  const f = await form(c);
+  const [owner, name, extra] = str(f.repository, 140).split('/');
+  const repo = owner && name && extra === undefined ? await getRepo(c.env, owner, name) : null;
+  if (!repo) fail(404, 'Repository not found. Enter it as owner/name, exactly as shown.');
+  if (!KINDS.includes(f.kind as SimpleKind)) fail(400, 'Select a request type.');
+  const kind = f.kind as SimpleKind;
+  const reason = str(f.reason, 1000);
+  if (reason.length < 20) fail(400, 'Give a reason of at least 20 characters.');
+  if (mentionsBannedTopic(reason)) fail(400, 'Your reason refers to a topic that cannot be discussed.');
+  if (!f.declare) fail(400, 'You must make the declaration.');
+  const request = await fileRequest(c.env, user, repo, kind, reason);
+  return redirect(c, `${repoUrl(repo)}/requests/${kind}/${request.id}`,
+    `${KIND_LABEL[kind]} lodged for ${repo.owner}/${repo.name}. ${FEES[`${kind}_file`].label}: ${money(feeFor(kind, 'file').amount)}. The repository owner has been notified.`);
 });
 
 // ── Status and terms ──
@@ -309,6 +337,8 @@ app.get('/status', async c => {
       (SELECT COUNT(*) FROM users WHERE frozen = 1) AS frozen`).bind(now - 86400000).first<Record<string, number>>();
   const open = isBusinessHours(now);
   return c.html(page({
+    path: c.req.path,
+    unread: c.get('unread'),
     title: 'Status',
     user: c.get('user'),
     flash: c.get('flash'),
@@ -332,6 +362,8 @@ app.get('/status', async c => {
 });
 
 app.get('/terms', c => c.html(page({
+  path: c.req.path,
+  unread: c.get('unread'),
   title: 'Terms of Service',
   user: c.get('user'),
   flash: c.get('flash'),
@@ -339,7 +371,7 @@ app.get('/terms', c => c.html(page({
     <h1 class="page-title">Terms of Service</h1>
     <ol class="terms">
       <li>Southbag Git is provided by Southbag. Continued use constitutes acceptance of these terms and any later terms.</li>
-      <li>Fees are set out in the <a href="/fees">fee schedule</a> and may change without notice. Fees are taken from your Southbag Online Banking account. Fees are final.</li>
+      <li>Fees are shown where they apply and may change without notice. Fees are taken from your Southbag Online Banking account. Fees are final.</li>
       <li>Every pull, push, fork, star and unstar requires a request approved by the repository owner.</li>
       <li>Pushes are processed during business hours, 9:00 to 17:00 AEST, Monday to Friday. Southbag does not observe daylight saving.</li>
       <li>Commit messages, issues and comments must not refer to topics that cannot be discussed. A list of these topics is not published.</li>
