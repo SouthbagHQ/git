@@ -11,16 +11,17 @@ import {
   page, pagination, repoHeader, statusWord, userLink, when,
 } from './layout';
 
-const now = Date.now();
+// Date.now() is 0 at module scope in Workers, so `now` is set per request.
+let now = 0;
 const min = 60000, hour = 3600000, day = 86400000;
 
 const alice: User = {
-  id: 'u-alice', username: 'alice', name: 'Alice', email: 'alice@example.com', bio: 'Writes notes.', created_at: now - 90 * day,
+  id: 'u-alice', username: 'alice', name: 'Alice', email: 'alice@example.com', bio: 'Writes notes.', created_at: 0,
   frozen: 0, frozen_reason: null, frozen_at: null, security_question: null, security_streak: 0,
 };
 const repo: Repo = {
   id: 'r-1', owner_id: 'u-alice', owner: 'alice', name: 'ledger-tools', description: 'Tools for reconciling ledgers. Internal use.',
-  default_branch: 'main', network_id: 'n-1', forked_from: 'r-0', next_number: 8, stars: 3, forks: 1, created_at: now - 40 * day, updated_at: now - 2 * hour,
+  default_branch: 'main', network_id: 'n-1', forked_from: 'r-0', next_number: 8, stars: 3, forks: 1, created_at: 0, updated_at: 0,
 };
 
 const readme = html`<div class="markdown">
@@ -48,6 +49,7 @@ export async function reconcile(month: string) {
 export const preview = new Hono<AppEnv>();
 
 preview.get('/__preview', c => {
+  now = Date.now();
   const signedOut = c.req.query('signedout') === '1';
   const user: User | null = signedOut ? null : { ...alice, frozen: c.req.query('frozen') === '1' ? 1 : 0 };
   const layout = (c.req.query('layout') as 'default' | 'wide' | 'narrow' | undefined) ?? 'wide';

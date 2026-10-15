@@ -62,7 +62,7 @@ a.sha { text-decoration: underline; }
 .file-table .message { color: var(--sb-muted); }
 .file-table .message a { color: var(--sb-muted); }
 .file-table .when { width: 140px; text-align: right; color: var(--sb-muted); font-size: 0.85rem; }
-.file-table .kind { display: inline-block; width: 3.6em; font-size: 0.7rem; color: var(--sb-muted); text-transform: uppercase; letter-spacing: 1px; }
+.file-table .kind { display: inline-block; width: 6.2em; font-size: 0.7rem; color: var(--sb-muted); text-transform: uppercase; letter-spacing: 1px; }
 .file-table tr.dir .name a { font-weight: 700; }
 @media (max-width: 640px) {
   .file-table .name { width: 55%; }
@@ -301,3 +301,9 @@ code.token { display: block; padding: 8px 10px; border: 4px double #111; backgro
 
 .pending-banner { border: 4px double #111; background: var(--sb-paper-nav); padding: 8px 12px; margin: 0 0 10px; font-size: 0.9rem; }
 :root[data-theme='dark'] .pending-banner, :root[data-theme='dark'] code.token { border-color: #999; }
+@media (max-width: 480px) {
+  .file-table .message { display: none; }
+  .file-table .name { width: auto; }
+  .clone-box { flex-wrap: wrap; }
+  .clone-box input { flex-basis: 100%; order: 2; }
+}
