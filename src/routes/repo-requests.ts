@@ -36,24 +36,30 @@ const feeLine = (kind: SimpleKind) =>
 
 const requestUrl = (repo: { owner: string; name: string }, r: Pick<RequestRow, 'kind' | 'id'>) => `${repoUrl(repo)}/requests/${r.kind}/${r.id}`;
 
-// The repository's requests, all kinds. Requests are filed from /requests (src/routes/account.ts), not here.
-app.get('/:owner/:repo/requests', async c => {
+// One tab per request type, listing that type's requests on the repository. Requests are filed
+// from /requests (src/routes/account.ts), not here.
+app.get('/:owner/:repo/requests', async c => c.redirect(`${repoUrl(await loadRepo(c))}/requests/pull`));
+
+app.get('/:owner/:repo/requests/:kind', async c => {
   const repo = await loadRepo(c);
+  const kind = kindParam(c.req.param('kind'));
   const status = c.req.query('status') === 'closed' ? 'closed' : 'open';
-  const { results } = await c.env.DB.prepare(`${requestSelect} WHERE requests.repo_id = ?
+  const { results } = await c.env.DB.prepare(`${requestSelect} WHERE requests.repo_id = ? AND requests.kind = ?
     AND requests.status ${status === 'open' ? "IN ('open', 'approved')" : "NOT IN ('open', 'approved')"} ORDER BY requests.created_at DESC LIMIT 100`)
-    .bind(repo.id).all<RequestRow>();
+    .bind(repo.id, kind).all<RequestRow>();
   return c.html(page({
     path: c.req.path,
     unread: c.get('unread'),
-    title: `Requests - ${repo.owner}/${repo.name}`,
+    title: `${KIND_LABEL[kind]}s - ${repo.owner}/${repo.name}`,
     layout: 'wide',
     user: c.get('user'),
     flash: c.get('flash'),
     body: html`
-      ${await header(c, repo, 'requests')}
-      <h2 class="page-title">Requests</h2>
-      ${KINDS.map(k => html`<p>${EXPLAIN[k]} ${feeLine(k)}</p>`)}
+      ${await header(c, repo, kind)}
+      <h2 class="page-title">${KIND_LABEL[kind]}s</h2>
+      <p>${EXPLAIN[kind]} ${feeLine(kind)}</p>
+      ${kind === 'push' ? html`<p>Business hours: 9:00 to 17:00 AEST, Monday to Friday. ${isBusinessHours(Date.now()) ? 'Currently open.'
+        : `Currently closed. Next opening: ${aestText(nextOpening(Date.now()))}.`}</p>` : ''}
       <p>Requests are filed from the Requests page.</p>
       <p class="tabs-small"><a href="?status=open" class="${status === 'open' ? 'current' : ''}">Open</a>
         <a href="?status=closed" class="${status === 'closed' ? 'current' : ''}">Closed</a></p>
@@ -64,12 +70,6 @@ app.get('/:owner/:repo/requests', async c => {
           <td>${userLink(r.requester)}</td><td>${timeAgo(r.created_at)}</td><td>${statusWord(r.status)}</td></tr>`)}</tbody>
       </table>` : emptyState('No requests.')}`,
   }));
-});
-
-app.get('/:owner/:repo/requests/:kind', async c => {
-  const repo = await loadRepo(c);
-  kindParam(c.req.param('kind'));
-  return c.redirect(`${repoUrl(repo)}/requests`);
 });
 
 // The ordinary forge buttons. Without an approved request each of these is an unrequested action:
@@ -112,7 +112,7 @@ app.get('/:owner/:repo/requests/:kind/:id', async c => {
     user,
     flash: c.get('flash'),
     body: html`
-      ${await header(c, repo, 'requests')}
+      ${await header(c, repo, request.kind)}
       <h2 class="page-title">${KIND_LABEL[kind]} ${request.id.slice(-6).toUpperCase()}</h2>
       ${card('Details', html`<table class="table">
         <tr><th>Status</th><td>${statusWord(request.status)}</td></tr>

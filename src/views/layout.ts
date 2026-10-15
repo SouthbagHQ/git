@@ -494,20 +494,25 @@ export function errorPage(user: User | null | undefined, status: number, message
 
 // ── Repository header ───────────────────────────────────────────────────
 
-export type RepoTab = 'code' | 'issues' | 'merge' | 'requests' | 'pushes' | 'activity' | 'settings';
+export type RepoTab = 'code' | 'issues' | 'merge' | 'pull' | 'push' | 'fork' | 'star' | 'unstar' | 'pushes' | 'activity' | 'settings';
 
 /** Where each repository tab lives, relative to /{owner}/{repo}. */
 export const REPO_TAB_PATHS: Record<RepoTab, string> = {
   code: '',
   issues: '/issues',
   merge: '/merge-requests',
-  requests: '/requests',
+  pull: '/requests/pull',
+  push: '/requests/push',
+  fork: '/requests/fork',
+  star: '/requests/star',
+  unstar: '/requests/unstar',
   pushes: '/pushes',
   activity: '/activity',
   settings: '/settings',
 };
 const REPO_TAB_LABELS: Record<RepoTab, string> = {
-  code: 'Code', issues: 'Issues', merge: 'Merge requests', requests: 'Requests', pushes: 'Push queue', activity: 'Activity', settings: 'Settings',
+  code: 'Code', issues: 'Issues', merge: 'Merge requests', pull: 'Pull requests', push: 'Push requests', fork: 'Fork requests',
+  star: 'Star requests', unstar: 'Unstar requests', pushes: 'Push queue', activity: 'Activity', settings: 'Settings',
 };
 
 export const repoPath = (repo: Pick<Repo, 'owner' | 'name'>) => `/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
@@ -516,7 +521,7 @@ export const repoPath = (repo: Pick<Repo, 'owner' | 'name'>) => `/${encodeURICom
  * Forgejo-style repository header: owner / name, "Forked from", description, the Watch, Star (or
  * Unstar) and Fork buttons with their counts (plain POST forms to /watch, /star or /unstar, /fork)
  * and the tab bar.
- *   counts: { issues, merge, requests, pushes } shown after tab labels (keys are the tab names).
+ *   counts: { issues, merge, pull, push, fork, star, unstar, pushes } shown after tab labels (keys are the tab names).
  *   starred: shows Unstar (posting to /unstar) instead of Star.
  *   parent: the repository this was forked from (or forkedFrom: "owner/name").
  *   isOwner: shows the Settings tab (default: user.id === repo.owner_id).
