@@ -413,9 +413,9 @@ function footer(now: number, balanceNote?: string) {
   </div></footer>`;
 }
 
-// Runs before anything paints: marks JS as on, applies the saved theme, and switches to the
+// Runs before anything paints: marks JS as on and switches to the
 // printer-friendly stylesheet for ?print=1.
-const headScript = raw(`<script>(function(){var d=document.documentElement;d.classList.add('js');try{var t=localStorage.getItem('sb_theme');if(t==='dark'||t==='light')d.dataset.theme=t}catch(e){}if(/[?&]print=1(&|$)/.test(location.search)){d.classList.add('print-view');var l=document.getElementById('print-css');if(l)l.media='all'}})();</script>`);
+const headScript = raw(`<script>(function(){var d=document.documentElement;d.classList.add('js');if(/[?&]print=1(&|$)/.test(location.search)){d.classList.add('print-view');var l=document.getElementById('print-css');if(l)l.media='all'}})();</script>`);
 
 export interface PageOptions {
   title: string;
