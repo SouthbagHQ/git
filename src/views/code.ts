@@ -15,8 +15,7 @@ export interface TreeEntry {
 
 /** Forgejo's file table: directories first is the caller's job. `latest` is the bar above it. */
 export function fileTable(entries: TreeEntry[], opts: { latest?: { sha: string; href: string; message: string; author: string; time: number } | null; parentHref?: string | null } = {}) {
-  const l = opts.latest;
-  return html`${l ? html`<div class="latest-commit"><strong>${l.author}</strong><span class="message"><a href="${l.href}">${firstLine(l.message)}</a></span><a class="sha" href="${l.href}">${l.sha.slice(0, 10)}</a><span class="muted">${when(l.time)}</span></div>` : ''}
+  return html`${opts.latest ? latestCommit(opts.latest) : ''}
   <table class="file-table"><tbody>
     ${opts.parentHref ? html`<tr class="dir"><td class="name" colspan="3"><a href="${opts.parentHref}">..</a></td></tr>` : ''}
     ${entries.map(e => html`<tr class="${e.type === 'tree' ? 'dir' : 'file'}">
@@ -26,6 +25,10 @@ export function fileTable(entries: TreeEntry[], opts: { latest?: { sha: string; 
     </tr>`)}
   </tbody></table>`;
 }
+
+/** The bar with the latest commit (above a file table or a blob). */
+export const latestCommit = (l: { sha: string; href: string; message: string; author: string; time: number }) =>
+  html`<div class="latest-commit"><strong>${l.author}</strong><span class="message"><a href="${l.href}">${firstLine(l.message)}</a></span><a class="sha" href="${l.href}">${l.sha.slice(0, 10)}</a><span class="muted">${when(l.time)}</span></div>`;
 
 export const firstLine = (message: string) => message.split('\n', 1)[0];
 
