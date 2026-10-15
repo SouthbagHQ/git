@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "southbag-git",
+  "account_id": "1044a3131c99356eba069325d3be3788",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "routes": [{ "pattern": "git.southbag.cc", "custom_domain": true }],
+  // Otherwise `wrangler dev` rewrites request URLs to the route's host, which breaks local sign-in.
+  "dev": { "host": "localhost:8788", "port": 8788 },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    // Pages are rendered by the Worker (like Forgejo). Only /css, /js and /img are static.
+    "run_worker_first": ["/*", "!/css/*", "!/js/*", "!/img/*", "!/palantir.js"]
+  },
+  // Repositories, git objects, requests, fees and fraud cases all live in one D1 database.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "southbag-git",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Every fee is taken from Southbag Online Banking through its Billing entrypoint (RPC, not public).
+  // Deploy banking first. See src/lib/banking.ts.
+  "services": [{ "binding": "BANKING", "service": "southbag-online-banking", "entrypoint": "Billing" }],
+  "triggers": {
+    // Every minute: process pending pushes in business hours, reject fee waivers, expire requests.
+    "crons": ["* * * * *"]
+  },
+  // Unpacking and hashing packfiles takes far more than the free plan's 10 ms.
+  "limits": { "cpu_ms": 30000 },
+  "observability": { "enabled": true }
+}
