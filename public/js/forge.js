@@ -3,14 +3,16 @@
 // dialogs and the house jank runs.
 //
 //   <form data-confirm="Request a star for alice/notes?" data-fee="$0.99">  two dialogs, then submits
-//   <div id="flash" data-message="Saved." data-error>                        shown as a dialog with OK
+//   <div id="flash" data-flash="plain|receipt|error" data-message="Saved.">     shown as a dialog with OK (receipt and
+//                                                                            rejection notice: a copy of its contents)
+//   <form data-form="SG-RQ1">                                                the form code, printed small (CSS)
 //   <button data-copy="#clone-url">Copy</button>                              copies an input's value; <code data-copy> copies its own text
 //   <button data-refuse-delete>Delete</button>                                refuses (no deleting on Southbag Git)
 //   <details class="menu-details"> … <input data-filter> … </details>        menus close when you click away; filter narrows links
 //   <button data-theme-toggle>Theme</button>                                  light/dark
 
-import { capitaliseKevin, promoStrip, toggleTheme } from './gags.js';
-import { cookieBanner, helpButtons, jank, navArrival, splash } from './chaos.js';
+import { capitaliseKevin, toggleTheme } from './gags.js';
+import { cookieConsent, jank, siteJump } from './chaos.js';
 import { copy, dialog, refuseDelete, toast } from './ui.js';
 
 // ── Confirmations ─────────────────────────────────────────────────────────
@@ -104,20 +106,26 @@ document.addEventListener('input', e => {
   for (const link of menu.querySelectorAll('a')) link.hidden = q !== '' && !link.textContent.toLowerCase().includes(q);
 });
 
+// ── Flash ─────────────────────────────────────────────────────────────────
+// The server renders the message in #flash: a plain notice, a receipt (<pre>) or a rejection notice.
+function showFlash() {
+  const flash = document.getElementById('flash');
+  if (!flash?.dataset.message) return;
+  const kind = flash.dataset.flash;
+  if ((kind === 'receipt' || kind === 'error') && flash.firstElementChild) {
+    dialog({ title: kind === 'receipt' ? 'Receipt' : 'Southbag Git', body: flash.firstElementChild.cloneNode(true) });
+    return;
+  }
+  toast(flash.dataset.message, { error: flash.hasAttribute('data-error') });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 function boot() {
   capitaliseKevin();
-  const shown = splash();
-  navArrival(shown);
-  const promo = promoStrip();
-  if (promo) document.body.prepend(promo);
-  helpButtons();
+  siteJump();
   jank();
-  shown.then(() => {
-    cookieBanner();
-    const flash = document.getElementById('flash');
-    if (flash?.dataset.message) toast(flash.dataset.message, { error: flash.hasAttribute('data-error') });
-  });
+  cookieConsent();
+  showFlash();
 }
 
 boot();

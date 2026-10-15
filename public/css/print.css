@@ -1,0 +1,16 @@
+/* Printer-friendly version. Loaded for printing, and for the screen when the address has ?print=1
+   (the head script in layout.ts switches it on). Most of the furniture goes; the page gets narrower. */
+
+* { text-shadow: none !important; animation: none !important; transition: none !important; }
+div, section, article, header, nav, aside, main, footer, form, li, ul, ol, img, button, input, textarea, select, label, table, details, a { box-shadow: none !important; }
+body { background: #fff !important; color: #000; padding: 0 !important; }
+html[data-theme='dark'] { --sb-text: #000; --sb-ink: #000; --sb-bg: #fff; --sb-paper: #fff; --sb-panel: #fff; --sb-field: #fff; --sb-field-ink: #000; color-scheme: light; }
+.menubar, .account, .masthead-note, .hours-line, .cookie-form, .footer-raw, .site-footer button, .js-only { display: none !important; }
+.site-header { border-bottom: 2px solid #000; background: #fff; }
+.masthead { min-height: 0; padding: 8px 0; }
+.layout, .layout.wide { max-width: 780px; padding: 12px 0 30px; }
+body > * { max-width: 780px; margin-left: auto; margin-right: auto; }
+.south-card, .card, .repo-header, .file-table, .blob, .diff-file, .commit-list, .issue-list, .request-list, .list, .table, .data-table { border: 1px solid #000 !important; background: #fff !important; transform: none !important; }
+h1, .repo-title, .page-title { transform: none !important; }
+a { color: #000; }
+.site-footer { background: #fff; border-top: 1px solid #000; }

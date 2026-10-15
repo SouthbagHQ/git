@@ -32,9 +32,12 @@ export const latestCommit = (l: { sha: string; href: string; message: string; au
 
 export const firstLine = (message: string) => message.split('\n', 1)[0];
 
-/** Clone URL with a Copy button and the pull request fee beside it. */
-export function cloneBox(url: string) {
-  return html`<div class="clone-box"><span class="clone-label">HTTPS</span><input id="clone-url" type="text" value="${url}" readonly aria-label="Clone URL"><button class="btn-small js-only" type="button" data-copy="#clone-url">Copy</button><span class="fee">Clone fee ${money(FEES.clone.amount)}. Pulling afterwards requires a pull request.</span></div>`;
+/**
+ * Clone URL with a Copy button and the clone fee beside it. `archive` (e.g. "/alice/notes/archive")
+ * adds an ordinary "Download ZIP" button: a POST form to that path.
+ */
+export function cloneBox(url: string, opts: { archive?: string } = {}) {
+  return html`<div class="clone-box"><span class="clone-label">HTTPS</span><input id="clone-url" type="text" value="${url}" readonly aria-label="Clone URL"><button class="btn-small js-only" type="button" data-copy="#clone-url">Copy</button>${opts.archive ? html`<form class="inline archive-form" method="post" action="${opts.archive}"><button class="btn-small" type="submit">Download ZIP</button></form>` : ''}<span class="fee">Clone fee ${money(FEES.clone.amount)}. Pulling afterwards requires a pull request.</span></div>`;
 }
 
 /** Branch dropdown (a <details> menu: works without JavaScript; forge.js adds the filter). */

@@ -94,7 +94,7 @@ const toolbar = (c: Ctx, repo: Repo, ref: string, branches: Branch[], path: stri
     ({ name: part, href: i < all.length - 1 ? srcUrl(repo, ref, all.slice(0, i + 1).join('/')) : undefined }))])}
   <span class="spacer"></span>
   ${extra}
-  ${cloneBox(cloneUrl(c, repo))}
+  ${cloneBox(cloneUrl(c, repo), { archive: `${repoUrl(repo)}/archive` })}
 </div>`;
 
 const README = /^readme(\.(md|markdown|txt))?$/i;
@@ -115,10 +115,10 @@ function emptyRepo(c: Ctx, repo: Repo) {
   const url = cloneUrl(c, repo);
   return card('Empty repository', html`
     <p>This repository has no commits yet.</p>
-    <p>Cloning needs no request (clone fee ${money(FEES.clone.amount)}). Pulling or fetching afterwards needs an approved pull request. Pushing needs an approved push request. File them with the buttons above.
+    <p>Cloning needs no request (clone fee ${money(FEES.clone.amount)}). Pulling or fetching afterwards needs an approved pull request. Pushing needs an approved push request. Requests are filed from the <a href="${repoUrl(repo)}/requests">Requests</a> page.
       Use an access token as the password for git over HTTPS. Create one at <a href="/settings/tokens">Access tokens</a>
       (issuance fee ${money(FEES.token_create.amount)}).</p>
-    <div class="repo-toolbar">${cloneBox(url)}</div>
+    <div class="repo-toolbar">${cloneBox(url, { archive: `${repoUrl(repo)}/archive` })}</div>
     <h3>Push an existing repository</h3>
     <pre><code>git remote add origin ${url}
 git push -u origin ${repo.default_branch}</code></pre>

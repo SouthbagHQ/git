@@ -1,44 +1,15 @@
-/* Jank (public/js/chaos.js): splash, cookie banner, help strip, ticker, sliding sidebar links and a
-   spinning loading word. Like the rest of Southbag, it ignores prefers-reduced-motion. */
+/* Jank (public/js/chaos.js): the cookie consent form, and a loading word that spins. Like the rest
+   of Southbag, it ignores prefers-reduced-motion. Nothing here is a joke on screen; parts of the
+   site were just never finished (see .raw in southbag.css). */
 
-/* ── Splash (Banking's loader) ─────────────────────────────────────── */
-.splash { position: fixed; inset: 0; z-index: 5000; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 16px; background: #000; color: #eee; transition: opacity 0.5s ease-out; }
-.splash.leaving { opacity: 0; }
-.splash img { width: min(720px, 92vw); height: min(405px, 52vw); box-shadow: none; }
-.splash .splash-caption { width: min(720px, 92vw); margin: 0; color: #eee; font-size: clamp(1.2rem, 3.5vw, 2rem); transform: rotate(-1deg); transform-origin: left; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); animation: none; }
-.splash-track { width: min(720px, 92vw); height: 6px; background: #333; box-shadow: none; }
-.splash-bar { width: 0; height: 100%; background: var(--sb-blue); box-shadow: none; transition: width 0.12s linear; }
-.splash-status { color: #ccc; margin: 0; }
-html.splash-open, html.splash-open body { overflow: hidden; }
-
-/* ── Cookie banner ─────────────────────────────────────────────────── */
-.cookie-banner { position: fixed; left: 16px; bottom: 16px; z-index: 900; width: min(440px, calc(100vw - 32px)); padding: 14px 16px; border: 3px ridge var(--sb-ridge); background: var(--sb-paper); transform: rotate(-0.6deg); }
-.cookie-banner h3 { margin: 0 0 4px; }
-.cookie-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; box-shadow: none; }
-@media (max-width: 600px) { .cookie-banner .btn-large { font-size: 1.1rem; padding: 0.45rem 1rem; } }
+/* ── Cookie consent (Form SG-C1): an unstyled form stuck to the bottom of the window ── */
+.cookie-form { position: fixed; left: 0; bottom: 0; z-index: 900; width: min(460px, 100vw); max-height: 70vh; overflow-y: auto; margin: 0; padding: 6px 10px; background: var(--sb-field); color: var(--sb-field-ink); border: 1px solid #888; }
+.cookie-form fieldset { margin: 6px 0; }
 .cookie-list { max-height: 50vh; overflow-y: auto; columns: 2 220px; font-size: 0.85rem; box-shadow: none; }
 .cookie-row { display: block; transform: none; margin: 2px 0; break-inside: avoid; box-shadow: none; }
 
-/* ── Help strip and ticker ─────────────────────────────────────────── */
-.help-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; padding: 6px 12px; border-bottom: 2px dashed var(--sb-rule); box-shadow: none; }
-@media (max-width: 600px) { .help-strip .btn-large { font-size: 1rem; padding: 0.35rem 0.9rem; } }
-.ticker { overflow: hidden; white-space: nowrap; border-bottom: 1px solid var(--sb-hairline); background: var(--sb-paper-nav); font-size: 0.8rem; box-shadow: none; }
-.ticker-track { display: inline-flex; gap: 4rem; padding: 3px 0 3px 100%; box-shadow: none; }
-.ticker-track span { box-shadow: none; }
-
 /* Service Table's spinner: the word spins, around its left edge. */
-.loading .spin, .busy-word { display: inline-block; transform-origin: left center; }
+.loading .spin, .busy-word { display: inline-block; transform-origin: left center; animation: spin 1.4s linear infinite; }
 
-/* ── Motion ────────────────────────────────────────────────────────── */
-/* Sidebar links move in from the left one after another, slowly and linearly, on the first page. */
-@keyframes nav-arrive { from { translate: -115% 0; } to { translate: 0 0; } }
-.south-nav.arriving { overflow: hidden; }
-.south-nav.arriving li { animation: nav-arrive 1.2s linear both; animation-delay: calc(var(--i, 0) * 0.15s); }
-@keyframes chaos-ticker { to { transform: translateX(-100%); } }
-.ticker-track { animation: chaos-ticker 60s linear infinite; }
-.help-strip > :nth-child(3) { animation: quiet-blink 2.4s linear infinite; }
-.loading .spin, .busy-word { animation: spin 1.4s linear infinite; }
 /* A submitted form waits a little before it goes (forge.js); its button says so. */
 button[data-busy] { cursor: progress; }
-/* Until the splash has run, nothing else shows (set by the head script, removed by chaos.js). */
-html.splash-open body > :not(.splash) { visibility: hidden; }

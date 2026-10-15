@@ -1,5 +1,6 @@
-// Dev-only preview of the views with fake data: GET /__preview (?signedout=1, ?frozen=1,
-// ?layout=default|wide|narrow, ?flash=Text) and GET /__preview/error.
+// Dev-only preview of the views with fake data: GET /__preview (?signedout=1, ?frozen=1, ?starred=1,
+// ?layout=default|wide|narrow, ?flash=Text: "Error: …" is a rejection notice, "$" makes a receipt)
+// and GET /__preview/error.
 
 import { Hono } from 'hono';
 import { html } from 'hono/html';
@@ -8,7 +9,7 @@ import { FEES, type FeeKey } from '../lib/fees';
 import { blobView, branchMenu, breadcrumbs, cloneBox, commitList, diffView, fileTable } from './code';
 import {
   avatar, button, card, confirmForm, dateOnly, dateTime, emptyState, errorPage, feeNotice, formField, label, money,
-  page, pagination, repoHeader, statusWord, userLink, when,
+  page, pagination, receipt, rejectionSlip, repoHeader, statusWord, userLink, when,
 } from './layout';
 
 // Date.now() is 0 at module scope in Workers, so `now` is set per request.
@@ -56,14 +57,14 @@ preview.get('/__preview', c => {
   const base = '/alice/ledger-tools';
 
   const body = html`
-    ${repoHeader(repo, { user, active: 'code', counts: { issues: 7, merge: 2, pull: 4, push: 1, pushes: 2, fork: 0, star: 3 }, parent: { owner: 'kevin', name: 'ledger-tools' } })}
+    ${repoHeader(repo, { user, active: 'code', counts: { issues: 7, merge: 2, requests: 4, pushes: 2 }, starred: c.req.query('starred') === '1', parent: { owner: 'kevin', name: 'ledger-tools' } })}
 
     <div class="pending-banner">2 pushes are waiting to be processed. Pushes are processed 9:00 to 17:00 AEST, Monday to Friday.</div>
     <div class="repo-toolbar">
       ${branchMenu('main', [{ name: 'main', href: '#' }, { name: 'reconcile-q3', href: '#' }, { name: 'kevin/review', href: '#' }])}
       ${breadcrumbs([{ name: 'ledger-tools', href: base }, { name: 'src' }])}
       <span class="spacer"></span>
-      ${cloneBox('https://git.southbag.cc/alice/ledger-tools.git')}
+      ${cloneBox('https://git.southbag.cc/alice/ledger-tools.git', { archive: `${base}/archive` })}
     </div>
     ${fileTable([
       { name: 'docs', type: 'tree', href: '#', commit: { message: 'Add month-end checklist', href: '#', time: now - 3 * day } },
@@ -154,13 +155,30 @@ preview.get('/__preview', c => {
       <tr><td>Star request</td><td><a href="#">bob/notes</a></td><td>${statusWord('withdrawn')}</td><td>${when(now - 6 * day)}</td></tr>
     </tbody></table>
 
+    <h2>Statuses</h2>
+    <p class="row wrap">${['open', 'pending', 'processing', 'approved', 'declined', 'rejected', 'executed', 'merged', 'processed', 'expired', 'withdrawn', 'closed'].map(st => statusWord(st))}</p>
+
+    <h2>Flash messages</h2>
+    <p class="muted">With JavaScript these open as dialogs. Try <a href="?flash=Star%20request%20filed.%20Filing%20fee%20%240.99%20charged.">a receipt</a>, <a href="?flash=Error%3A%20Starring%20costs%20%240.99.%20Your%20balance%20is%20insufficient.">a rejection notice</a> or <a href="?flash=Saved.">a plain message</a>.</p>
+    <div class="row wrap" style="align-items: flex-start">
+      ${receipt('Fork request filed. Filing fee $1.49 charged. Execution fee $2.99 charged.', { now, number: 'R004821937' })}
+      ${rejectionSlip('Starring costs $0.99. Your balance is insufficient.', { now, reference: 'SG-RJ-104233' })}
+    </div>
+
     <h2>Fee schedule</h2>
     <table class="fee-table"><thead><tr><th>Fee</th><th class="amount">Amount</th></tr></thead><tbody>
       ${(Object.keys(FEES) as FeeKey[]).slice(0, 10).map(k => html`<tr><td>${FEES[k].label}</td><td class="amount">${money(FEES[k].amount)}</td></tr>`)}
     </tbody></table>
 
     <h2>Forms</h2>
-    ${card('New repository', html`<form class="form" method="post" action="#" data-confirm="Create this repository?" data-fee="${money(FEES.repo_create.amount)}">
+    ${card('Request', html`<form method="post" action="#" data-form="SG-RQ1">
+      ${feeNotice(['pull_file'])}
+      ${formField({ label: 'Request type', name: 'kind', type: 'select', options: ['Pull request', 'Push request', 'Fork request', 'Star request'] })}
+      ${formField({ label: 'Reason', name: 'reason', type: 'textarea', rows: 3, required: true, hint: 'Required. Requests without a reason are declined.' })}
+      ${formField({ label: 'I accept the fees', name: 'accept', type: 'checkbox' })}
+      <div class="form-actions">${button('Lodge request')}</div>
+    </form>`)}
+    ${card('New repository', html`<form class="form" method="post" action="#" data-form="SG-NR1" data-confirm="Create this repository?" data-fee="${money(FEES.repo_create.amount)}">
       ${feeNotice(['repo_create'])}
       <label>Repository name<input name="name" required maxlength="64"></label>
       <div class="split"><label>Default branch<input name="branch" value="main"></label><label>Visibility<select name="v"><option>Public</option></select></label></div>

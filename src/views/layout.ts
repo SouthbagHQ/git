@@ -6,6 +6,7 @@ import { html, raw } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
 import type { Repo, User } from '../env';
 import { FEES, money as formatMoney, type FeeKey } from '../lib/fees';
+import { aestText, isBusinessHours, nextOpening } from '../lib/hours';
 
 export type Html = HtmlEscapedString | Promise<HtmlEscapedString>;
 /** Anything that can go in a template slot: markup, text (escaped), numbers, lists, nothing. */
@@ -68,13 +69,18 @@ const STATUS_WORDS: Record<string, string> = {
   approved: 'Approved', declined: 'Declined', rejected: 'Rejected', executed: 'Executed', withdrawn: 'Withdrawn',
   expired: 'Expired', merged: 'Merged', closed: 'Closed', cancelled: 'Cancelled', charged: 'Charged', failed: 'Failed',
 };
+/** Final statuses (approved, declined, executed, merged, expired, withdrawn, rejected, processed). */
+export const FINAL_STATUSES = new Set(['approved', 'declined', 'executed', 'merged', 'expired', 'withdrawn', 'rejected', 'processed']);
+
 /**
- * A status as plain bordered text: open → "Pending", executed → "Executed" and so on.
- * Issues are "Open"/"Closed": pass `{ issue: true }`.
+ * A status. Final ones are plain bold uppercase text ("APPROVED"); others are bordered text:
+ * open becomes "Pending", processing "Processing". Issues are "Open"/"Closed": pass `{ issue: true }`.
  */
 export function statusWord(status: string, opts: { issue?: boolean } = {}) {
   const word = opts.issue && status === 'open' ? 'Open' : STATUS_WORDS[status] ?? (status.charAt(0).toUpperCase() + status.slice(1));
-  return html`<span class="status status-${status.replace(/[^a-z_-]/gi, '')}">${word}</span>`;
+  const cls = status.replace(/[^a-z_-]/gi, '');
+  if (FINAL_STATUSES.has(status)) return html`<b class="status status-final status-${cls}">${word.toUpperCase()}</b>`;
+  return html`<span class="status status-${cls}">${word}</span>`;
 }
 
 /** A label, rendered as plain text in square brackets. */
@@ -163,147 +169,265 @@ export function confirmForm(action: string, text: string, opts: { confirm: strin
   return html`<form class="inline" method="post" action="${action}" data-confirm="${opts.confirm}"${fees.length ? html` data-fee="${money(total)}"` : ''}>${Object.entries(opts.hidden ?? {}).map(([k, v]) => html`<input type="hidden" name="${k}" value="${v}">`)}${button(text, { size: opts.size })}</form>`;
 }
 
-// ── Page shell ───────────────────────────────────────────────────────────
+// ── Flash messages: receipts, rejection slips, plain notices ────────────
+//
+// Routes redirect with a flash string. "Error: …" becomes a rejection notice (the prefix is dropped),
+// anything with a dollar amount becomes a plain-text receipt, anything else a plain notice. The server
+// renders the full slip or receipt in #flash (visible without JavaScript); forge.js shows a copy of
+// it in a dialog.
 
-const announcements = [
-  'Welcome to Southbag Git.',
-  'Pushes received outside business hours are processed the next business day.',
-  'Every request is reviewed.',
-  'Scheduled maintenance: in progress. Estimated completion: unknown.',
-  'Fee schedule updated. Continued use constitutes acceptance.',
-  'Activity on Southbag Git is reviewed.',
-];
-const ticker = () => html`<div class="ticker" aria-hidden="true"><div class="ticker-track">${[...announcements, ...announcements].map(line => html`<span>${line}</span>`)}</div></div>`;
-
-const helpLabels = ['Help', 'Help Centre', 'Get help', 'Support', 'Contact Support', 'Contact us', 'Live chat', 'FAQ'];
-function helpStrip() {
-  const labels = [...helpLabels].sort(() => Math.random() - 0.5).slice(0, 6);
-  return html`<div class="help-strip" role="navigation" aria-label="Help">${labels.map((text, i) =>
-    html`<a class="${i % 2 ? 'btn-large' : 'btn-tiny'}" href="https://support.southbag.cc" data-help>${text}</a>`)}</div>`;
+const AEST = 10 * 3600000;
+const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+/** "15/10/2026" and "2:03:41 pm AEST" for a moment, in AEST (UTC+10, no daylight saving). */
+export function aestParts(ms: number): { date: string; time: string } {
+  const t = new Date(ms + AEST);
+  const h = t.getUTCHours();
+  return {
+    date: `${pad(t.getUTCDate())}/${pad(t.getUTCMonth() + 1)}/${t.getUTCFullYear()}`,
+    time: `${h % 12 || 12}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())} ${h < 12 ? 'am' : 'pm'} AEST`,
+  };
 }
 
-const topLinks = [
-  { href: '/explore', label: 'Explore' },
-  { href: '/requests', label: 'Requests' },
-  { href: '/merge-requests', label: 'Merge requests' },
-  { href: '/fees', label: 'Fees' },
-  { href: '/waivers', label: 'Fee waivers' },
-];
+const digits = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join('');
+const AMOUNT = /(-?)\$(\d[\d,]*(?:\.\d{1,2})?)/g;
+const cents = (sign: string, amount: string) => Math.round(parseFloat(amount.replace(/,/g, '')) * 100) * (sign ? -1 : 1);
+
+export type FlashKind = 'error' | 'receipt' | 'plain';
+export interface FlashInput { message: string; error?: boolean }
+
+/** Which way a flash message is shown, and its text without an "Error: " prefix. */
+export function flashKind(flash: FlashInput): { kind: FlashKind; text: string } {
+  if (flash.message.startsWith('Error: ')) return { kind: 'error', text: flash.message.slice(7).trim() };
+  if (flash.error) return { kind: 'error', text: flash.message };
+  AMOUNT.lastIndex = 0;
+  if (AMOUNT.test(flash.message)) return { kind: 'receipt', text: flash.message };
+  return { kind: 'plain', text: flash.message };
+}
+
+/** The receipt's line items: one per sentence, with the sentence's dollar amounts added up on the right. */
+export function receiptLines(text: string): { lines: Array<{ text: string; cents: number | null }>; total: number } {
+  const sentences = text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+  let total = 0;
+  const lines = sentences.map(sentence => {
+    let sum: number | null = null;
+    for (const m of sentence.matchAll(AMOUNT)) sum = (sum ?? 0) + cents(m[1], m[2]);
+    if (sum != null) total += sum;
+    return { text: sentence, cents: sum };
+  });
+  return { lines, total };
+}
+
+const RECEIPT_WIDTH = 34;
+const RULE = '-'.repeat(RECEIPT_WIDTH);
+/** Wraps text to the receipt width; the amount, if any, goes at the right of the last line. */
+function receiptRow(text: string, amount = ''): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  const rows: string[] = [];
+  let row = '';
+  for (const word of words) {
+    if (row && (row + ' ' + word).length > RECEIPT_WIDTH) { rows.push(row); row = word; }
+    else row = row ? `${row} ${word}` : word;
+  }
+  if (row) rows.push(row);
+  if (amount) {
+    const last = rows.pop() ?? '';
+    if (last.length + 1 + amount.length > RECEIPT_WIDTH) rows.push(last, amount.padStart(RECEIPT_WIDTH));
+    else rows.push(last + amount.padStart(RECEIPT_WIDTH - last.length));
+  }
+  return rows.join('\n');
+}
+
+/** A receipt as plain monospace text with dashed rules. `now` and `number` are for the preview. */
+export function receipt(text: string, opts: { now?: number; number?: string } = {}) {
+  const { date, time } = aestParts(opts.now ?? Date.now());
+  const { lines, total } = receiptLines(text);
+  const body = [
+    'SOUTHBAG GIT',
+    'TAX INVOICE / RECEIPT',
+    RULE,
+    `Receipt no: ${opts.number ?? `R${digits(9)}`}`,
+    `Date: ${date}`,
+    `Time: ${time}`,
+    RULE,
+    ...lines.map(l => receiptRow(l.text, l.cents == null ? '' : money(l.cents))),
+    RULE,
+    receiptRow('TOTAL', money(total)),
+    receiptRow('GST included', money(Math.round(total / 11))),
+    RULE,
+    receiptRow('Please retain this receipt for your records.'),
+  ].join('\n');
+  return html`<pre class="receipt">${body}</pre>`;
+}
+
+/** A rejection notice: NOTICE, reference number, date and time, the message. Unstyled. */
+export function rejectionSlip(text: string, opts: { now?: number; reference?: string } = {}) {
+  const { date, time } = aestParts(opts.now ?? Date.now());
+  return html`<div class="slip raw">
+    <h3>NOTICE</h3>
+    <p>Reference: ${opts.reference ?? `SG-RJ-${digits(6)}`}<br>Issued: ${date} ${time}</p>
+    <hr>
+    <p><b>${text}</b></p>
+    <p><small>This notice was issued automatically. Quote the reference number in any correspondence.</small></p>
+  </div>`;
+}
+
+/** #flash: the slip, receipt or notice. forge.js turns it into a dialog. */
+export function flashView(flash: FlashInput) {
+  const { kind, text } = flashKind(flash);
+  const content = kind === 'error' ? rejectionSlip(text) : kind === 'receipt' ? receipt(text) : text;
+  return html`<div id="flash" class="flash flash-${kind}${kind === 'plain' ? ' notice' : ''}" role="${kind === 'error' ? 'alert' : 'status'}" data-flash="${kind}" data-message="${text}"${kind === 'error' ? raw(' data-error') : ''}>${content}</div>`;
+}
+
+// ── Page shell ───────────────────────────────────────────────────────────
+// Masthead (stretched logo, account menu), a menu bar, then a few things nobody got round to
+// styling (business hours, a breadcrumb trail, a footer of default tables and lists). Full-width
+// content, no sidebar. Anything with class "raw" is left at the browser's default look.
+
+const navLinks = (user: User | null) => user
+  ? [
+    { href: '/explore', label: 'Explore' },
+    { href: '/requests', label: 'Requests' },
+    { href: '/merge-requests', label: 'Merge requests' },
+    { href: '/waivers', label: 'Fee waivers' },
+  ]
+  : [
+    { href: '/explore', label: 'Explore' },
+    { href: '/waivers', label: 'Fee waivers' },
+  ];
 
 const isCurrent = (href: string, path: string) => href === '/' ? path === '/' : path === href || path.startsWith(`${href}/`);
 const current = (href: string, path: string | undefined) => (path && isCurrent(href, path) ? raw(' aria-current="page"') : '');
+const countBadge = (n: number) => (n ? html`<span class="badge">${n > 99 ? '99+' : n}</span>` : '');
 
-function header(user: User | null, unread: number, path?: string) {
+function header(user: User | null, unread: number, path: string | undefined, balanceNote?: string) {
   const account = user
-    ? html`<a class="btn" href="/repo/new">New repository</a>
-      <a href="/notifications"${current('/notifications', path)}>Notifications${unread ? html`<span class="badge">${unread > 99 ? '99+' : unread}</span>` : ''}</a>
-      <details class="menu-details">
+    ? html`<details class="menu-details account-menu">
         <summary class="btn">${user.username}</summary>
         <div class="menu" role="menu">
           <p class="menu-note">Signed in as ${user.username}</p>
           <a role="menuitem" href="/${encodeURIComponent(user.username)}">Profile</a>
+          <a role="menuitem" href="/">Dashboard</a>
           <a role="menuitem" href="/settings/tokens">Access tokens</a>
-          <a role="menuitem" href="/billing">Billing</a>
+          <a role="menuitem" href="/billing">${balanceNote ? `Billing (${balanceNote})` : 'Billing'}</a>
+          <a role="menuitem" href="/security">Account security</a>
+          <a role="menuitem" href="/settings">Settings</a>
           <hr>
           <a role="menuitem" href="/auth/logout">Sign out</a>
         </div>
       </details>`
     : html`<a class="btn" href="/auth/login">Sign in</a>`;
   return html`<header class="site-header">
-    <a class="brand" href="/" aria-label="${SITE}"><img src="/img/logo-400.png" alt="southbag"><h2>Git</h2></a>
-    <nav class="top-links" aria-label="${SITE}">${topLinks.map(l => html`<a href="${l.href}"${current(l.href, path)}>${l.label}</a>`)}</nav>
-    <div class="account">${account}</div>
+    <div class="masthead">
+      <a class="brand" href="/" aria-label="${SITE}"><img src="/img/logo-400.png" alt="southbag"><span class="brand-name">Git</span></a>
+      <p class="masthead-note">Customer code services</p>
+      <div class="account">${user ? html`<span class="signed-in tiny">Welcome, ${user.name || user.username}</span>` : ''}${account}</div>
+    </div>
+    <nav class="menubar" aria-label="${SITE}">
+      ${navLinks(user).map(l => html`<a href="${l.href}"${current(l.href, path)}>${l.label}</a>`)}
+      ${user ? html`<a href="/notifications"${current('/notifications', path)}>Notifications${countBadge(unread)}</a>
+        <a class="btn-small menubar-new" href="/repo/new"${current('/repo/new', path)}>New repository</a>` : ''}
+    </nav>
   </header>`;
 }
 
-function sidebar(user: User | null, unread: number, path: string | undefined, balanceNote?: string) {
-  const links: Array<{ href: string; label: string; badge?: number; external?: boolean }> = user
-    ? [
-      { href: '/', label: 'Dashboard' },
-      { href: `/${encodeURIComponent(user.username)}`, label: 'Your repositories' },
-      { href: '/repo/new', label: 'New repository' },
-      { href: '/explore', label: 'Explore' },
-      { href: '/requests', label: 'Requests' },
-      { href: '/merge-requests', label: 'Merge requests' },
-      { href: '/notifications', label: 'Notifications', badge: unread },
-      { href: '/billing', label: 'Billing' },
-      { href: '/fees', label: 'Fee schedule' },
-      { href: '/waivers', label: 'Fee waivers' },
-      { href: '/settings/tokens', label: 'Access tokens' },
-      { href: '/security', label: 'Account security' },
-      { href: 'https://support.southbag.cc', label: 'Help', external: true },
-    ]
-    : [
-      { href: '/', label: 'Home' },
-      { href: '/explore', label: 'Explore' },
-      { href: '/fees', label: 'Fee schedule' },
-      { href: '/waivers', label: 'Fee waivers' },
-      { href: 'https://support.southbag.cc', label: 'Help', external: true },
-      { href: '/auth/login', label: 'Sign in' },
-    ];
-  const apps = [
-    { href: 'https://banking.southbag.cc', label: balanceNote ? `Southbag Online Banking (${balanceNote})` : 'Southbag Online Banking' },
-    { href: 'https://southbag.cc', label: 'Southbag' },
-    { href: 'https://identity.southbag.cc/home', label: 'Southbag Identity' },
-    { href: 'https://social.southbag.cc', label: 'Southbag Social' },
-    { href: 'https://office.southbag.cc', label: 'Southbag Office' },
+/** Business hours as one line of text nobody styled, with two links. */
+function hoursLine(now: number) {
+  const open = isBusinessHours(now);
+  return html`<p class="raw hours-line"><small>Business hours: 9:00-17:00 AEST Mon-Fri (currently ${open ? 'open' : html`closed, reopens ${aestText(nextOpening(now))}`})</small><br>
+    <a href="/waivers">Fee waivers</a> | <a class="print-link" href="?print=1">Printer-friendly version</a></p>`;
+}
+
+const TRAIL_TOP: Record<string, string> = {
+  explore: 'Explore', requests: 'Requests', 'merge-requests': 'Merge requests', waivers: 'Fee waivers',
+  billing: 'Billing', settings: 'Settings', notifications: 'Notifications', security: 'Account security', status: 'Status',
+  terms: 'Terms', repo: 'Repositories', auth: 'Sign in', __preview: 'Preview',
+};
+const TRAIL_REPO: Record<string, string> = {
+  issues: 'Issues', 'merge-requests': 'Merge requests', requests: 'Requests', pushes: 'Push queue', activity: 'Activity',
+  settings: 'Settings', commits: 'Commits', branches: 'Branches', src: 'Files', raw: 'Raw', commit: 'Commit',
+};
+const TRAIL_SUB: Record<string, string> = { new: 'New', tokens: 'Access tokens' };
+
+/** "Home > Southbag Git > Services > …" from the request path. */
+function trail(path: string | undefined) {
+  const parts = (path ?? '/').split('/').filter(Boolean).map(p => { try { return decodeURIComponent(p); } catch { return p; } });
+  const crumbs: Array<{ label: string; href?: string }> = [
+    { label: 'Home', href: 'https://southbag.cc' },
+    { label: SITE, href: '/' },
+    { label: 'Services' },
   ];
-  let i = 0;
-  const item = (l: { href: string; label: string; badge?: number; external?: boolean }, external = false) =>
-    html`<li style="--i: ${i++}"><a href="${l.href}"${external || l.external ? raw(' target="_blank" rel="noopener"') : current(l.href, path)}>${l.label}${l.badge ? html`<span class="badge">${l.badge > 99 ? '99+' : l.badge}</span>` : ''}</a></li>`;
-  return html`<nav class="south-nav" aria-label="Sidebar">
-    <p class="nav-title">${SITE}</p>
-    ${user ? html`<p class="nav-hello tiny">Hello, "${user.email || user.username}" !</p>` : ''}
-    <ul>${links.map(l => item(l))}</ul>
-    <p class="nav-title nav-apps">Southbag</p>
-    <ul>${apps.map(a => item(a, true))}</ul>
-    <div class="nav-footer">
-      ${user ? html`<a class="btn" href="/auth/logout">Sign out</a>` : html`<a class="btn" href="/auth/login">Sign in</a>`}
-      <p class="tiny">Kevin is watching</p>
-    </div>
-  </nav>`;
+  if (parts.length && TRAIL_TOP[parts[0]]) {
+    crumbs.push({ label: TRAIL_TOP[parts[0]], href: `/${parts[0]}` });
+    for (const p of parts.slice(1)) crumbs.push({ label: TRAIL_SUB[p] ?? p });
+  } else if (parts.length) {
+    crumbs.push({ label: 'Repositories', href: '/explore' });
+    const base = parts.slice(0, 2).map(encodeURIComponent);
+    crumbs.push({ label: parts[0], href: `/${base[0]}` });
+    if (parts[1]) crumbs.push({ label: parts[1], href: `/${base[0]}/${base[1]}` });
+    if (parts[2]) {
+      const linked = ['issues', 'merge-requests', 'requests', 'pushes', 'activity', 'settings', 'branches'].includes(parts[2]);
+      crumbs.push({ label: TRAIL_REPO[parts[2]] ?? parts[2], href: linked ? `/${base.join('/')}/${parts[2]}` : undefined });
+      for (const p of parts.slice(3, 8)) crumbs.push({ label: p });
+    }
+  }
+  const last = crumbs.length - 1;
+  return html`<div class="raw trail"><nav aria-label="Breadcrumb">You are here: ${crumbs.map((c, i) => html`${i ? ' > ' : ''}${c.href && i !== last ? html`<a href="${c.href}">${c.label}</a>` : html`<span${i === last ? raw(' aria-current="page"') : ''}>${c.label}</span>`}`)}</nav></div>`;
 }
 
-function aside() {
-  return html`<aside><div class="sticky">
-    <section class="announcement-grid">
-      <h3>Notices</h3>
-      <div class="announcement-card"><h3>Business hours</h3><p>Pushes are processed 9:00 to 17:00 AEST, Monday to Friday. Pushes received at other times attract an after-hours processing fee of ${money(FEES.push_after_hours.amount)}.</p></div>
-      <div class="announcement-card"><h3>Fee waivers</h3><p>Open source projects may apply for a fee waiver. Application fee ${money(FEES.waiver_apply.amount)}.</p><p><a href="/waivers">Apply</a></p></div>
-      <div class="announcement-card"><h3>Fee schedule</h3><p>Fees apply to requests, merges, issues and comments.</p><p><a href="/fees">View fee schedule</a></p></div>
-    </section>
-  </div></aside>`;
-}
-
-function footer() {
+function footer(now: number, balanceNote?: string) {
+  // A visitor counter. It goes up about once every nine seconds.
+  const visitors = String(Math.floor((now - 1704067200000) / 9000)).padStart(8, '0');
+  const year = new Date(now + AEST).getUTCFullYear();
   return html`<footer class="site-footer"><div class="inner">
-    <strong>${SITE}</strong>
-    <a href="/terms">Terms</a>
-    <a href="/fees">Fee schedule</a>
-    <a href="/waivers">Fee waivers</a>
-    <a href="/status">Status</a>
-    <a href="https://southbag.cc">southbag.cc</a>
-    <button class="btn-tiny js-only" type="button" data-theme-toggle>Theme</button>
-    <p>Activity on Southbag Git is reviewed.</p>
-    <p>Business hours: 9:00 to 17:00 AEST, Monday to Friday.</p>
+    <div class="raw footer-raw">
+      <h3>Business hours</h3>
+      <table border="1" cellpadding="3" cellspacing="0">
+        <tr><td>Monday to Friday</td><td>9:00 - 17:00 AEST</td></tr>
+        <tr><td>Saturday</td><td>Closed</td></tr>
+        <tr><td>Sunday</td><td>Closed</td></tr>
+        <tr><td>Public holidays</td><td>Closed</td></tr>
+      </table>
+      <p><small>Pushes and requests received outside business hours are processed the next business day.</small></p>
+      <ul>
+        <li><a href="/terms">Terms</a></li>
+        <li><a href="/waivers">Fee waivers</a></li>
+        <li><a href="/status">Status</a></li>
+        <li><a href="https://support.southbag.cc" target="_blank" rel="noopener">Support</a></li>
+        <li><a href="https://banking.southbag.cc" target="_blank" rel="noopener">${balanceNote ? `Southbag Online Banking (${balanceNote})` : 'Southbag Online Banking'}</a></li>
+      </ul>
+      <label>Other Southbag sites: <select data-jump aria-label="Other Southbag sites">
+        <option value="">-- Please select --</option>
+        <option value="https://southbag.cc">southbag.cc</option>
+        <option value="https://identity.southbag.cc/home">Southbag Identity</option>
+        <option value="https://social.southbag.cc">Southbag Social</option>
+        <option value="https://office.southbag.cc">Southbag Office</option>
+      </select></label>
+      <hr>
+      <img class="secure-badge" src="data:image/gif;base64," alt="Southbag Secure Site" width="88" height="31">
+      <p>Visitors: ${visitors}</p>
+      <p><small>Last updated: 14/03/2011</small></p>
+    </div>
+    <p class="fine-print">Activity on ${SITE} is reviewed. Fees are charged to your Southbag Online Banking account. Continued use constitutes acceptance.</p>
+    <p class="fine-print">Best viewed at 1024 x 768 in Internet Explorer 8. &copy; ${year} Southbag.</p>
+    <p><button class="btn-tiny js-only" type="button" data-theme-toggle>Theme</button></p>
   </div></footer>`;
 }
 
-// Runs before anything paints: marks JS as on, applies the saved theme, and hides the page until the
-// splash (once per session) has run. A timer brings the page back if the scripts never load.
-const headScript = raw(`<script>(function(){var d=document.documentElement;d.classList.add('js');try{var t=localStorage.getItem('sb_theme');if(t==='dark'||t==='light')d.dataset.theme=t;if(!sessionStorage.getItem('sb_splash_seen')){d.classList.add('splash-open');setTimeout(function(){d.classList.remove('splash-open')},9000)}}catch(e){}})();</script>`);
+// Runs before anything paints: marks JS as on, applies the saved theme, and switches to the
+// printer-friendly stylesheet for ?print=1.
+const headScript = raw(`<script>(function(){var d=document.documentElement;d.classList.add('js');try{var t=localStorage.getItem('sb_theme');if(t==='dark'||t==='light')d.dataset.theme=t}catch(e){}if(/[?&]print=1(&|$)/.test(location.search)){d.classList.add('print-view');var l=document.getElementById('print-css');if(l)l.media='all'}})();</script>`);
 
 export interface PageOptions {
   title: string;
   user: User | null | undefined;
   body: Child;
   flash?: string | null | { message: string; error?: boolean };
-  /** default: sidebar, page, notices. wide: sidebar and page (repository pages). narrow: one column (sign-in, errors). */
+  /** default: content up to 1200px. wide: up to 1400px (repository pages). narrow: one 600px column (sign-in, errors). */
   layout?: 'default' | 'wide' | 'narrow';
   unread?: number;
-  /** Shown beside Southbag Online Banking in the sidebar, e.g. "$12.40". */
+  /** Shown beside Billing in the account menu and Southbag Online Banking in the footer, e.g. "$12.40". */
   balanceNote?: string;
-  /** The request path, to mark the current nav link. */
+  /** The request path: marks the current menu link and builds the breadcrumb trail. */
   path?: string;
 }
 
@@ -312,6 +436,7 @@ export function page(opts: PageOptions) {
   const { layout = 'default', unread = 0 } = opts;
   const user = opts.user ?? null;
   const flash = typeof opts.flash === 'string' ? { message: opts.flash, error: false } : opts.flash ?? null;
+  const now = Date.now();
   return html`<!doctype html>
 <html lang="en-AU" data-theme="light">
 <head>
@@ -324,25 +449,24 @@ export function page(opts: PageOptions) {
 <link rel="stylesheet" href="/css/southbag.css">
 <link rel="stylesheet" href="/css/forge.css">
 <link rel="stylesheet" href="/css/chaos.css">
+<link id="print-css" rel="stylesheet" href="/css/print.css" media="print">
 ${headScript}
 <script src="/palantir.js" data-app="git" data-session-url="/api/me"></script>
 <script type="module" src="/js/forge.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-${ticker()}
-${header(user, unread, opts.path)}
+${header(user, unread, opts.path, opts.balanceNote)}
+${hoursLine(now)}
+${trail(opts.path)}
 ${user?.frozen ? html`<div class="frozen-banner" role="alert">Your account is frozen pending review. <a href="/security">Answer the security questions</a></div>` : ''}
-${helpStrip()}
 <div class="layout${layout === 'default' ? '' : ` ${layout}`}">
-${layout === 'narrow' ? '' : sidebar(user, unread, opts.path, opts.balanceNote)}
 <main id="main" tabindex="-1">
-${flash?.message ? html`<div id="flash" class="notice" role="status" data-message="${flash.message}"${flash.error ? raw(' data-error') : ''}>${flash.message}</div>` : ''}
+${flash?.message ? flashView(flash) : ''}
 ${opts.body}
 </main>
-${layout === 'default' ? aside() : ''}
 </div>
-${footer()}
+${footer(now, opts.balanceNote)}
 </body>
 </html>`;
 }
@@ -370,61 +494,51 @@ export function errorPage(user: User | null | undefined, status: number, message
 
 // ── Repository header ───────────────────────────────────────────────────
 
-export type RepoTab = 'code' | 'issues' | 'merge' | 'pull' | 'push' | 'pushes' | 'fork' | 'star' | 'activity' | 'settings';
+export type RepoTab = 'code' | 'issues' | 'merge' | 'requests' | 'pushes' | 'activity' | 'settings';
 
 /** Where each repository tab lives, relative to /{owner}/{repo}. */
 export const REPO_TAB_PATHS: Record<RepoTab, string> = {
   code: '',
   issues: '/issues',
   merge: '/merge-requests',
-  pull: '/requests/pull',
-  push: '/requests/push',
+  requests: '/requests',
   pushes: '/pushes',
-  fork: '/requests/fork',
-  star: '/requests/star',
   activity: '/activity',
   settings: '/settings',
 };
 const REPO_TAB_LABELS: Record<RepoTab, string> = {
-  code: 'Code', issues: 'Issues', merge: 'Merge requests', pull: 'Pull requests', push: 'Push requests',
-  pushes: 'Push queue', fork: 'Fork requests', star: 'Star requests', activity: 'Activity', settings: 'Settings',
+  code: 'Code', issues: 'Issues', merge: 'Merge requests', requests: 'Requests', pushes: 'Push queue', activity: 'Activity', settings: 'Settings',
 };
 
 export const repoPath = (repo: Pick<Repo, 'owner' | 'name'>) => `/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
 
 /**
- * Forgejo-style repository header: owner / name, "Forked from", description, the request buttons
- * (each a GET form to the request tab, which has the filing form with its reason; filing fee shown) and the tab bar.
- *   counts: { issues, merge, pull, push, pushes, fork, star } shown after tab labels.
+ * Forgejo-style repository header: owner / name, "Forked from", description, the Watch, Star (or
+ * Unstar) and Fork buttons with their counts (plain POST forms to /watch, /star or /unstar, /fork)
+ * and the tab bar.
+ *   counts: { issues, merge, requests, pushes } shown after tab labels (keys are the tab names).
+ *   starred: shows Unstar (posting to /unstar) instead of Star.
  *   parent: the repository this was forked from (or forkedFrom: "owner/name").
  *   isOwner: shows the Settings tab (default: user.id === repo.owner_id).
  */
 export function repoHeader(repo: Repo, opts: { user: User | null | undefined; active: RepoTab; counts?: Partial<Record<string, number>>; starred?: boolean; parent?: { owner: string; name: string } | null; forkedFrom?: string | null; isOwner?: boolean }) {
   const base = repoPath(repo);
   const owner = opts.isOwner ?? Boolean(opts.user && opts.user.id === repo.owner_id);
-  const full = `${repo.owner}/${repo.name}`;
   const fromText = opts.forkedFrom?.split('/');
   const parent = opts.parent ?? (fromText?.length === 2 ? { owner: fromText[0], name: fromText[1] } : null);
-  // The filing form (with its required reason) is on the request tab, so these go there.
-  const action = (kind: 'star' | 'unstar' | 'fork' | 'pull' | 'push', text: string, _confirmText: string, count?: number) => {
-    const fee = FEES[`${kind}_file` as FeeKey];
-    return html`<form class="repo-action" method="get" action="${base}/requests/${kind === 'unstar' ? 'star' : kind}">
-      <button class="btn-small" type="submit">${text}</button>${count != null ? html`<span class="count" title="${text}">${count}</span>` : html`<span></span>`}
-      <span class="fee">Filing fee ${money(fee.amount)}</span>
-    </form>`;
-  };
+  const action = (path: string, text: string, count: number, title?: string) =>
+    html`<form class="repo-button" method="post" action="${base}/${path}"><button class="btn-small" type="submit">${text}</button><span class="count"${title ? html` title="${title}"` : ''}>${count}</span></form>`;
   const tabs = (Object.keys(REPO_TAB_PATHS) as RepoTab[]).filter(tab => tab !== 'settings' || owner);
   return html`<div class="repo-header">
-    <h1 class="repo-title"><a href="/${encodeURIComponent(repo.owner)}">${repo.owner}</a><span class="sep">/</span><a class="repo-name" href="${base}">${repo.name}</a></h1>
-    ${parent ? html`<p class="repo-meta">Forked from <a href="${repoPath(parent)}">${parent.owner}/${parent.name}</a></p>` : ''}
-    <p class="repo-desc">${repo.description || html`<span class="muted">No description.</span>`}</p>
-    <div class="repo-actions">
-      ${opts.starred
-        ? action('unstar', 'Request unstar', `File a request to remove your star from ${full}?`, repo.stars)
-        : action('star', 'Request star', `File a request to star ${full}?`, repo.stars)}
-      ${action('fork', 'Request fork', `File a request to fork ${full}?`, repo.forks)}
-      ${action('pull', 'Request pull', `File a request to pull from ${full}?`)}
-      ${action('push', 'Request push', `File a request to push to ${full}?`)}
+    <div class="repo-heading">
+      <h1 class="repo-title"><a href="/${encodeURIComponent(repo.owner)}">${repo.owner}</a><span class="sep">/</span><a class="repo-name" href="${base}">${repo.name}</a></h1>
+      ${parent ? html`<p class="repo-meta">Forked from <a href="${repoPath(parent)}">${parent.owner}/${parent.name}</a></p>` : ''}
+      <p class="repo-desc">${repo.description || html`<span class="muted">No description.</span>`}</p>
+    </div>
+    <div class="repo-buttons">
+      ${action('watch', 'Watch', 1, 'Kevin is watching')}
+      ${opts.starred ? action('unstar', 'Unstar', repo.stars) : action('star', 'Star', repo.stars)}
+      ${action('fork', 'Fork', repo.forks)}
     </div>
   </div>
   <nav class="tabs repo-tabs" aria-label="Repository">${tabs.map(tab => {
