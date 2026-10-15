@@ -20,7 +20,7 @@
     {
       "binding": "DB",
       "database_name": "southbag-git",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "497c16ee-2a4a-4f8a-be74-67b2b1d951d5",
       "migrations_dir": "migrations"
     }
   ],
@@ -31,7 +31,7 @@
     // Every minute: process pending pushes in business hours, reject fee waivers, expire requests.
     "crons": ["* * * * *"]
   },
-  // Unpacking and hashing packfiles takes far more than the free plan's 10 ms.
-  "limits": { "cpu_ms": 30000 },
+  // Unpacking and hashing packfiles can take more than the free plan's 10 ms of CPU. On Workers Paid,
+  // add: "limits": { "cpu_ms": 30000 },
   "observability": { "enabled": true }
 }

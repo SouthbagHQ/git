@@ -65,8 +65,8 @@ the other Southbag products ([Social](../social), [Identity](../identity), [Bank
   an origin registers a client). `src/lib/auth.ts`.
 - **Cron** every minute processes due pushes, decides fee waivers and expires requests
   (`src/lib/processor.ts`). Page loads do the same in the background.
-- Unpacking packfiles needs more than the free plan's 10 ms of CPU: `limits.cpu_ms` is set, which
-  needs the Workers Paid plan.
+- The Southbag account is on the Workers Free plan (10 ms of CPU per request). Unpacking large pushes
+  can need more; on Workers Paid, add `"limits": { "cpu_ms": 30000 }` to `wrangler.jsonc`.
 
 ## Develop
 
@@ -83,5 +83,5 @@ approved pull request). `npm run check` type-checks.
 
 ## Deploy
 
-Create the D1 database (`wrangler d1 create southbag-git`), put its id in `wrangler.jsonc`, deploy
-Banking first, then `npm run deploy`.
+Deployed at https://git.southbag.cc (Cloudflare account Southbag, D1 database `southbag-git`).
+Deploy Banking first (the `BANKING` binding), then `npm run deploy` (migrations, then the Worker).
