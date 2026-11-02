@@ -26,6 +26,9 @@
   ],
   // Every fee is taken from Southbag Online Banking through its Billing entrypoint (RPC, not public).
   // Deploy banking first. See src/lib/banking.ts.
+  // `wrangler secret put IDENTITY_INTERNAL_SECRET` with this service's entry from Identity's
+  // INTERNAL_API_SECRETS (key "southbag-git"): freezes are account-level, reported to and checked
+  // against Identity (src/lib/identity.ts). Without it only the legacy local flag applies.
   "services": [{ "binding": "BANKING", "service": "southbag-online-banking", "entrypoint": "Billing" }],
   "triggers": {
     // Every minute: process pending pushes in business hours, reject fee waivers, expire requests.

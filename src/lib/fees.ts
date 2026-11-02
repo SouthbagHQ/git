@@ -48,9 +48,11 @@ export const FEES = {
   token_create: { amount: 500, label: 'Access token issuance fee' },
   waiver_apply: { amount: 1500, label: 'Fee waiver application fee' },
   waiver_decline: { amount: 3500, label: 'Fee waiver assessment fee' },
+  username_change: { amount: 2000, label: 'Username change fee' },
+  // Not charged by Git any more - freezes are account-level and Identity charges these during the
+  // unfreeze flow. Kept so /security can quote the current amounts.
   fraud_review: { amount: 4995, label: 'Account review fee' },
   security_wrong: { amount: 200, label: 'Incorrect security answer fee' },
-  username_change: { amount: 2000, label: 'Username change fee' },
 } as const satisfies Record<string, { amount: number; label: string }>;
 
 export type FeeKey = keyof typeof FEES;

@@ -371,7 +371,7 @@ ${headScript}
 ${header(user, unread, opts.path, opts.balanceNote)}
 ${hoursLine(now)}
 ${trail(opts.path)}
-${user?.frozen ? html`<div class="frozen-banner" role="alert">Your account is frozen pending review. <a href="/security">Answer the security questions</a></div>` : ''}
+${user?.frozen ? html`<div class="frozen-banner" role="alert">Your account is frozen pending review. Every Southbag service is blocked. <a href="https://identity.southbag.cc/unfreeze">Unfreeze at Southbag Identity</a></div>` : ''}
 <div class="layout${layout === 'default' ? '' : ` ${layout}`}">
 <main id="main" tabindex="-1">
 ${flash?.message ? flashView(flash) : ''}

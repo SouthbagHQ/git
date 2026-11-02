@@ -2,13 +2,16 @@
 // and never decides anything about money, requests, fraud or business hours itself.
 //
 import type { Env, Repo, User } from '../env';
+import { UNFREEZE_URL } from './identity';
 import { chargeFee, FEES, money } from './fees';
 import { hasApproved, consumeApproved } from './requests';
 import { reviewPush as review } from './pushes';
 import { userFromBasicAuth } from './tokens';
 
 const site = 'https://git.southbag.cc';
-const frozen = { ok: false, message: `Your account is frozen pending review. Answer the security questions at ${site}/security` } as const;
+const frozen = { ok: false, message: `Your account is frozen pending review. Unfreeze at ${UNFREEZE_URL}` } as const;
+const statusUnknown = { ok: false, message: 'Southbag Identity is unavailable, so your account status cannot be checked. Try again shortly.' } as const;
+const frozenCheck = (user: User) => (user.central_unavailable ? statusUnknown : frozen);
 
 export type Waiter = { waitUntil(promise: Promise<unknown>): void };
 
@@ -64,7 +67,7 @@ const needPullRequest = (user: User, repo: Repo): Verdict => ({
  * Every time after that needs an approved pull request, used up here with the execution fee.
  */
 export async function beforeListRefs(env: Env, user: User, repo: Repo): Promise<Verdict> {
-  if (user.frozen) return frozen;
+  if (user.frozen) return frozenCheck(user);
   const first = await env.DB.prepare('INSERT OR IGNORE INTO clones (user_id, repo_id, created_at) VALUES (?, ?, ?)')
     .bind(user.id, repo.id, Date.now()).run();
   if (first.meta.changes) {
@@ -81,6 +84,9 @@ export async function beforeListRefs(env: Env, user: User, repo: Repo): Promise<
  * advertisement in the last ten minutes. The message is shown by git as `fatal: remote error: …`.
  */
 export async function beforeFetch(env: Env, _ctx: Waiter, user: User, repo: Repo): Promise<Verdict> {
+  // Fetching reads private repo data: a KNOWN frozen account is refused, and while the central
+  // answer is UNKNOWN (Identity down) the read fails closed too - no private data without a status.
+  if (user.central_unavailable) return statusUnknown;
   if (user.frozen) return frozen;
   const since = Date.now() - 10 * 60000;
   const recent = await env.DB.prepare(`SELECT 1 FROM clones WHERE user_id = ?1 AND repo_id = ?2 AND created_at > ?3
@@ -94,7 +100,7 @@ export const fetchNote = `Pull request used. ${FEES.pull_execute.label}: ${money
 
 /** Called on the receive-pack ref advertisement and before reading a pushed pack. Needs an approved push request. */
 export async function beforePush(env: Env, user: User, repo: Repo): Promise<Verdict> {
-  if (user.frozen) return frozen;
+  if (user.frozen) return frozenCheck(user);
   if (!await hasApproved(env, user, repo, 'push'))
     return { ok: false, message: `You need an approved push request to push to ${repo.owner}/${repo.name}. File one at ${site}/requests (signed in as ${user.username})` };
   return { ok: true };

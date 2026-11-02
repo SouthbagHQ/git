@@ -6,6 +6,7 @@ import { HTTPException } from 'hono/http-exception';
 import type { AppEnv, Env } from './env';
 import { callback, getCookie, login, logout, safeReturnTo, session } from './lib/auth';
 import { flashCookie, redirect } from './lib/http';
+import { applyCentralFreeze } from './lib/identity';
 import { processDue } from './lib/processor';
 import { errorPage } from './views/layout';
 import git from './routes/git';
@@ -44,6 +45,24 @@ app.post('/auth/logout', c => logout(c.req.raw, c.env, c.executionCtx));
 // ── Pages ──
 app.use('*', async (c, next) => {
   const user = await session(c.req.raw, c.env);
+  // The freeze is account-level: Identity's status applies to the in-memory user for this
+  // request (and a completed central unfreeze clears the legacy local flag).
+  if (user) await applyCentralFreeze(c.env, user);
+  // A KNOWN frozen account is blocked entirely, reads included: no private account data, no
+  // notifications, nothing behind the session. Logout and the public pages stay reachable.
+  // Status UNKNOWN (Identity configured but unreachable) fails CLOSED too: no private pages.
+  if (user?.central_unavailable && !c.req.path.startsWith('/auth/')) {
+    const text = 'Southbag Identity is unavailable, so your account status cannot be checked. Try again shortly.';
+    if (c.req.path.startsWith('/api/'))
+      return c.json({ error: 'unavailable', text }, 503);
+    return c.html(errorPage(user, 503, text), 503);
+  }
+  if (user?.frozen && !c.req.path.startsWith('/auth/')) {
+    const text = 'Your account is frozen pending review. Unfreeze at https://identity.southbag.cc/unfreeze';
+    if (c.req.path.startsWith('/api/'))
+      return c.json({ error: 'frozen', text }, 423);
+    return c.html(errorPage(user, 423, text), 423);
+  }
   c.set('user', user);
   c.set('unread', user ? (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL')
     .bind(user.id).first<{ n: number }>())?.n ?? 0 : 0);

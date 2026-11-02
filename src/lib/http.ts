@@ -1,5 +1,6 @@
 import { HTTPException } from 'hono/http-exception';
 import type { Ctx, User } from '../env';
+import { UNFREEZE_URL } from './identity';
 
 /** Nothing on Southbag Git can be deleted. Every attempt gets this. */
 export const NO_DELETING = "Deletion isn't available. Kevin knows what you did.";
@@ -16,10 +17,11 @@ export function requireUser(c: Ctx): User {
   return user;
 }
 
-/** The signed-in user, who must not be frozen by fraud detection. */
+/** The signed-in user, whose account must not be frozen. */
 export function requireActiveUser(c: Ctx): User {
   const user = requireUser(c);
-  if (user.frozen) fail(423, 'Your account is frozen pending review. Answer the security questions to continue.');
+  if (user.central_unavailable) fail(503, 'Southbag Identity is unavailable, so your account status cannot be checked. Try again shortly.');
+  if (user.frozen) fail(423, `Your account is frozen pending review. Unfreeze at ${UNFREEZE_URL}`);
   return user;
 }
 
