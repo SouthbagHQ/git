@@ -21,6 +21,8 @@ export interface User {
   frozen_at: number | null;
   security_question: string | null;
   security_streak: number;
+  /** In-memory only (never a column): the central status couldn't be checked this request. */
+  central_unavailable?: number;
 }
 
 /** A row of `repos`, with the owner's username. */

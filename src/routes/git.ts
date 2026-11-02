@@ -13,6 +13,7 @@
 import { Hono, type Context } from 'hono';
 import type { AppEnv, Env, Repo, User } from '../env';
 import { beforeFetch, beforeListRefs, beforePush, gitAuthenticate, reviewPush } from '../lib/policy';
+import { applyCentralFreeze } from '../lib/identity';
 import {
   advertiseRefs,
   errorAdvertisement,
@@ -54,7 +55,11 @@ async function authenticate(c: C): Promise<User | null> {
   if (devPolicyOff(c)) {
     return c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(c.env.GIT_DEV_USER as string).first<User>();
   }
-  return gitAuthenticate(c.env, c.req.raw);
+  const user = await gitAuthenticate(c.env, c.req.raw);
+  // The freeze is account-level: Identity's status applies here too, so a frozen account
+  // cannot push (or fetch) with a token that predates the freeze.
+  if (user) await applyCentralFreeze(c.env, user);
+  return user;
 }
 
 function policyFor(c: C, user: User, repo: Repo): GitPolicy {

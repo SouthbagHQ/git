@@ -7,6 +7,7 @@
 //    minutes later in AEST business hours, or on the next business day (with the after-hours fee).
 
 import type { Env, Repo, User } from '../env';
+import { UNFREEZE_URL } from './identity';
 import { setRef } from '../git/refs';
 import { BANNED_MESSAGE, mentionsBannedTopic } from './banned';
 import { FEES, chargeFee, money } from './fees';
@@ -29,8 +30,10 @@ export async function reviewPush(env: Env, _ctx: Waiter, user: User, repo: Repo,
   const messages: string[] = [];
 
   if (user.frozen) {
-    refuseAll('account frozen pending review');
-    messages.push('Your account is frozen. Answer the security questions at https://git.southbag.cc/security');
+    refuseAll(user.central_unavailable ? 'account status unavailable' : 'account frozen pending review');
+    messages.push(user.central_unavailable
+      ? 'Southbag Identity is unavailable, so your account status cannot be checked. Try again shortly.'
+      : `Your account is frozen. Unfreeze at ${UNFREEZE_URL}`);
     return { results, messages };
   }
   const requestId = await consumeApproved(env, user, repo, 'push');

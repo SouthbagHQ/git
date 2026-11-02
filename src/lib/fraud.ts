@@ -1,12 +1,13 @@
-// Fraud detection. Deliberately sensitive: one finding freezes the account until the owner answers
-// three security questions in a row (src/lib/security.ts).
+// Fraud detection. Deliberately sensitive: one finding freezes the account, at the account level:
+// the freeze is reported to Southbag Identity and unfreezing happens there (security questions and
+// the account review fee), not here.
 
 import type { Env, Repo, User } from '../env';
 import { aestClock } from './hours';
 import { newId } from './ids';
 import { notifyStatement } from './notify';
 import type { PushAnalysis } from './policy';
-import { pickQuestion } from './security';
+import { UNFREEZE_URL, flushFreezeReports } from './identity';
 
 export interface Finding {
   rule: string;
@@ -56,15 +57,21 @@ export async function inspectPush(env: Env, user: User, repo: Repo, analyses: Pu
 export async function freeze(env: Env, user: User, repo: Repo | null, findings: Finding[]): Promise<void> {
   const now = Date.now();
   const reason = findings.map(f => f.rule).join(', ');
+  // The local flag, the findings and the durable report to Identity land in one batch: the freeze
+  // is account-level now, and a down Identity must not lose the report (the cron retries it).
   await env.DB.batch([
-    env.DB.prepare(`UPDATE users SET frozen = 1, frozen_reason = ?, frozen_at = ?, security_question = ?, security_streak = 0 WHERE id = ?`)
-      .bind(reason, now, pickQuestion(null), user.id),
+    env.DB.prepare(`UPDATE users SET frozen = 1, frozen_reason = ?, frozen_at = ?, security_question = NULL, security_streak = 0 WHERE id = ?`)
+      .bind(reason, now, user.id),
     ...findings.map(f => env.DB.prepare('INSERT INTO fraud_events (id, user_id, repo_id, rule, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(newId(now), user.id, repo?.id ?? null, f.rule, f.detail, now)),
-    notifyStatement(env, user.id, `Your account has been frozen by fraud detection (${reason}).`, '/security'),
+    env.DB.prepare(`INSERT INTO identity_freeze_outbox (user_id, reason, created_at, reported_at) VALUES (?, ?, ?, NULL)
+      ON CONFLICT(user_id) DO UPDATE SET reason = excluded.reason, reported_at = NULL`)
+      .bind(user.id, `Git fraud detection (${reason})`, now),
+    notifyStatement(env, user.id, `Your account has been frozen by fraud detection (${reason}). Unfreeze at ${UNFREEZE_URL}`, '/security'),
   ]);
   user.frozen = 1;
   user.frozen_reason = reason;
+  await flushFreezeReports(env);
 }
 
 /**

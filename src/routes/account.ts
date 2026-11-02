@@ -6,7 +6,7 @@ import { html } from 'hono/html';
 import type { AppEnv } from '../env';
 import { FEES, chargeFee, money } from '../lib/fees';
 import { fail, form, redirect, requireActiveUser, requireUser, str } from '../lib/http';
-import { QUESTIONS, STREAK_NEEDED, answerQuestion } from '../lib/security';
+import { UNFREEZE_URL } from '../lib/identity';
 import { KIND_LABEL, KINDS, fileRequest, requestSelect, type RequestRow, type SimpleKind } from '../lib/requests';
 import { feeFor } from '../lib/fees';
 import { getRepo, repoUrl } from '../lib/repos';
@@ -221,7 +221,6 @@ app.get('/security', async c => {
   }));
   const events = (await c.env.DB.prepare(`SELECT rule, detail, created_at FROM fraud_events WHERE user_id = ? AND rule != 'activity'
     ORDER BY created_at DESC LIMIT 10`).bind(user.id).all<{ rule: string; detail: string; created_at: number }>()).results;
-  const question = QUESTIONS[user.security_question ?? ''] ?? QUESTIONS.ceo;
   return c.html(page({
     path: c.req.path,
     unread: c.get('unread'),
@@ -232,26 +231,17 @@ app.get('/security', async c => {
       <h1 class="page-title">Account review</h1>
       <p>Your account was frozen on ${user.frozen_at ? dateTime(user.frozen_at) : 'an unrecorded date'} by fraud detection.
         Reason: ${user.frozen_reason ?? 'Not recorded'}.</p>
-      <p>To unfreeze your account, answer ${STREAK_NEEDED} security questions correctly in a row. An incorrect answer costs
-        ${money(FEES.security_wrong.amount)} and starts again. The account review fee of ${money(FEES.fraud_review.amount)} applies
-        when your account is unfrozen.</p>
-      ${card(`Question ${user.security_streak + 1} of ${STREAK_NEEDED}`, html`
-        <form method="post" action="/security" class="form" autocomplete="off">
-          <label>${question.text}<input name="answer" required maxlength="200" autocomplete="off"></label>
-          <button class="btn" type="submit">Submit answer</button>
-        </form>`)}
+      <p>Account freezes are now handled at the account level. While frozen, every Southbag service blocks your account.
+        To unfreeze, answer the security questions at
+        <a href="https://identity.southbag.cc/unfreeze">Southbag Identity</a>. An incorrect answer costs
+        ${money(FEES.security_wrong.amount)}; the account review fee of ${money(FEES.fraud_review.amount)} applies when the
+        freeze lifts.</p>
       ${card('Findings', html`<table class="table"><thead><tr><th>Rule</th><th>Detail</th><th>When</th></tr></thead>
         <tbody>${events.map(e => html`<tr><td>${e.rule}</td><td>${e.detail}</td><td>${dateTime(e.created_at)}</td></tr>`)}</tbody></table>`)}`,
   }));
 });
 
-app.post('/security', async c => {
-  const user = requireUser(c);
-  const answer = str((await form(c)).answer, 200);
-  const result = await answerQuestion(c.env, user, answer);
-  if (result.unfrozen) return redirect(c, '/', `Your account has been unfrozen. Account review fee: ${money(FEES.fraud_review.amount)}.`);
-  return redirect(c, '/security', result.correct ? 'Correct.' : `Incorrect. Incorrect security answer fee: ${money(FEES.security_wrong.amount)}.`);
-});
+app.post('/security', c => redirect(c, '/security', `Account freezes moved to Southbag Identity. Unfreeze at ${UNFREEZE_URL}`));
 
 // ── Requests across repositories ──
 
