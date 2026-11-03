@@ -7,6 +7,7 @@ import type { AppEnv, Env } from './env';
 import { callback, getCookie, login, logout, safeReturnTo, session } from './lib/auth';
 import { flashCookie, redirect } from './lib/http';
 import { applyCentralFreeze } from './lib/identity';
+import { handleMcp } from './lib/mcp';
 import { processDue } from './lib/processor';
 import { errorPage } from './views/layout';
 import git from './routes/git';
@@ -35,6 +36,9 @@ app.notFound(c => c.html(errorPage(c.get('user') ?? null, 404, 'Page not found.'
 
 // ── Git over HTTPS (Basic auth with access tokens, no cookies) ──
 app.route('/', git);
+
+// ── Agent access (MCP): bearer agent token, $1 request fee per tools/call, discovery free ──
+app.all('/mcp', c => handleMcp(c.req.raw, c.env));
 
 // ── Auth ──
 app.get('/auth/login', c => login(c.req.raw, c.env, safeReturnTo(c.req.query('next'))));
