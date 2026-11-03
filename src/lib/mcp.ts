@@ -104,6 +104,7 @@ const authFailed = (status: number, text: string): AgentAuth => ({ status, text 
 // credential, same as the freeze API). 401 unknown/revoked token; 503 Identity down or this
 // service unconfigured. No caching: a cached 'valid' answer is a revocation bypass window.
 async function resolveAgent(env: Env, token: string): Promise<AgentAuth> {
+  if (!token) return authFailed(401, 'Missing agent token. Tokens are issued at https://identity.southbag.cc/agents and presented as a bearer token.');
   const secret = typeof env.IDENTITY_INTERNAL_SECRET === 'string' ? env.IDENTITY_INTERNAL_SECRET : '';
   if (!secret) return authFailed(503, 'Agent access is not configured on this service.');
   const origin = String(env.IDENTITY_ORIGIN || 'https://identity.southbag.cc');
