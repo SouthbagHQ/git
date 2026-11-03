@@ -227,19 +227,22 @@ test('create_comment posts the comment and charges the $0.10 comment fee', async
   restore();
 });
 
-test('write tools reject bad input after the request fee only; unknown repo charges no action fee', async () => {
+test('write tools validate BEFORE fees: bad input or unknown target is a free rejection, nothing journaled', async () => {
   const { db, env, charges, restore } = setup('u1');
   const bad = await handleMcp(post(rpc(1, 'tools/call', { name: 'create_issue', arguments: { owner: 'ingo', repo: 'portal' } }), { ...auth, ...key }), env);
   const badBody = await bad.json();
   assert.equal(badBody.result.isError, true);
   assert.match(badBody.result.content[0].text, /needs owner, repo and title/);
-  assert.equal(charges.length, 1); // request fee only
-  assert.equal(journal(db)[0].status, 'done'); // terminal: caller bug is a completed answer, never re-run
+  assert.match(badBody.result.content[0].text, /No fees charged/);
+  assert.equal(charges.length, 0);
+  assert.equal(journal(db).length, 0); // a free rejection is not a call: nothing to reconcile
   const missing = await handleMcp(post(rpc(2, 'tools/call', { name: 'create_issue', arguments: { owner: 'ingo', repo: 'nope', title: 'Where' } }), { ...auth, 'idempotency-key': 'test-key-0002' }), env);
   const missingBody = await missing.json();
-  assert.equal(missingBody.result.structuredContent.notFound, true);
-  assert.equal(charges.length, 2); // still request fee only
+  assert.equal(missingBody.result.isError, true);
+  assert.match(missingBody.result.content[0].text, /not found/);
+  assert.equal(charges.length, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 0);
+  assert.equal(journal(db).length, 0);
   restore();
 });
 
@@ -249,6 +252,7 @@ test("'The Issue' cannot be re-filed", async () => {
   const body = await res.json();
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /considered resolved/);
+  assert.equal(charges.length, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 0);
   restore();
 });

@@ -253,6 +253,36 @@ async function runGitTool(env: Env, user: AgentIdentity['user'], name: string, a
   return { text: requests.length ? `${requests.length} request${requests.length === 1 ? '' : 's'}.` : 'No requests filed. Suspiciously productive.', data: { requests } };
 }
 
+// Validation BEFORE fees: everything checkable without side effects (argument shape, title rules,
+// banned topics, repository/issue existence) runs here, before the journal claim and before any
+// fee moves. A malformed call or an unknown target is a free rejection - the request fee only ever
+// pays for an action actually attempted. createIssue/createComment re-check what they must.
+async function preflightGitTool(env: Env, name: string, args: Json): Promise<void> {
+  if (name === 'create_issue') {
+    const owner = typeof args.owner === 'string' ? args.owner.trim() : '';
+    const repoName = typeof args.repo === 'string' ? args.repo.trim() : '';
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : '';
+    const body = typeof args.body === 'string' ? args.body.trim().slice(0, 20000) : '';
+    if (!owner || !repoName || !title) throw new ToolInputError('create_issue needs owner, repo and title.');
+    if (/^the issue$/i.test(title)) throw new ToolInputError('An issue with that title already exists. It is considered resolved.');
+    if (mentionsBannedTopic(`${title}\n${body}`)) throw new ToolInputError('This issue refers to a topic that cannot be discussed.');
+    if (!(await getRepo(env, owner, repoName))) throw new ToolInputError(`Repository ${owner}/${repoName} not found.`);
+    return;
+  }
+  if (name === 'create_comment') {
+    const owner = typeof args.owner === 'string' ? args.owner.trim() : '';
+    const repoName = typeof args.repo === 'string' ? args.repo.trim() : '';
+    const number = typeof args.number === 'number' && Number.isInteger(args.number) ? args.number : 0;
+    const body = typeof args.body === 'string' ? args.body.trim().slice(0, 10000) : '';
+    if (!owner || !repoName || !number || !body) throw new ToolInputError('create_comment needs owner, repo, number and body.');
+    if (mentionsBannedTopic(body)) throw new ToolInputError('This comment refers to a topic that cannot be discussed.');
+    const repo = await getRepo(env, owner, repoName);
+    if (!repo) throw new ToolInputError(`Repository ${owner}/${repoName} not found.`);
+    const issue = await env.DB.prepare('SELECT 1 AS ok FROM issues WHERE repo_id = ? AND number = ?').bind(repo.id, number).first();
+    if (!issue) throw new ToolInputError(`${owner}/${repoName}#${number} not found.`);
+  }
+}
+
 // A 'pending' journal row means a previous call with this key did not finish cleanly. It is NEVER
 // re-run and never reclaimed: without a fencing mechanism shared by the fee executor and the
 // action executor, no local observation proves the original call cannot still commit. The row
@@ -270,6 +300,7 @@ async function handleToolsCall(request: Request, env: Env, message: { id: unknow
   const auth = await resolveAgent(env, request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1] || '');
   if ('status' in auth) return json(rpcError(message.id, -32001, auth.text), auth.status);
   const name = typeof message.params?.name === 'string' ? message.params.name : '';
+  const args = (message.params?.arguments ?? {}) as Json;
   if (!toolList().some(tool => tool.name === name))
     return json(rpcError(message.id, -32602, `Unknown tool '${name}'. tools/list is free and quotes every fee.`));
   const key = request.headers.get('idempotency-key')?.trim() || '';
@@ -284,6 +315,14 @@ async function handleToolsCall(request: Request, env: Env, message: { id: unknow
     if (stored.structuredContent?.receipt) stored.structuredContent.receipt.duplicate = true;
     return json(rpcResult(message.id, stored));
   };
+
+  try {
+    await preflightGitTool(env, name, args);
+  } catch (error) {
+    if (error instanceof ToolInputError)
+      return json(rpcResult(message.id, { content: [{ type: 'text', text: `${error.message} No fees charged.` }], isError: true, structuredContent: { rejected: 'invalid_input' } }));
+    throw error;
+  }
 
   const existing = await db.prepare('SELECT tool, args_hash, status, response FROM mcp_call WHERE idempotency_key = ?').bind(rowKey).first<{ tool: string; args_hash: string; status: string; response: string | null }>();
   if (existing) {
@@ -322,7 +361,7 @@ async function handleToolsCall(request: Request, env: Env, message: { id: unknow
 
   let result: Json;
   try {
-    const { text, data } = await runGitTool(env, auth.user, name, (message.params?.arguments ?? {}) as Json, key);
+    const { text, data } = await runGitTool(env, auth.user, name, args, key);
     result = {
       content: [{ type: 'text', text }],
       isError: false,
