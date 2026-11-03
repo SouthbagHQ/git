@@ -39,7 +39,7 @@ function d1Shim(db) {
   };
 }
 
-function setup(userId, { frozen = false, identityUnreachable = false } = {}) {
+function setup(userId, { frozen = false, identityUnreachable = false, scopes = ['read', 'write'] } = {}) {
   const db = new DatabaseSync(':memory:');
   for (const file of readdirSync('migrations').sort()) db.exec(readFileSync('migrations/' + file, 'utf8'));
   db.prepare("INSERT INTO users (id, username, name, created_at, updated_at) VALUES (?, 'ingo', 'Ingo', 0, 0)").run(userId);
@@ -68,7 +68,7 @@ function setup(userId, { frozen = false, identityUnreachable = false } = {}) {
     if (String(url).endsWith('/api/internal/agent-token')) {
       const token = JSON.parse(init.body).token;
       if (!String(token).startsWith('good-')) return new Response(JSON.stringify({ error: 'unknown_token' }), { status: 404 });
-      return new Response(JSON.stringify({ tokenId: 'tok1', tokenName: 'test', userId, email: `${userId}@x.test`, name: 'Ingo' }), { status: 200 });
+      return new Response(JSON.stringify({ tokenId: 'tok1', tokenName: 'test', userId, email: `${userId}@x.test`, name: 'Ingo', scopes }), { status: 200 });
     }
     return new Response(JSON.stringify({ frozen, reason: null, frozenAt: null, unfrozenViaFlow: false }), { status: 200 });
   };
@@ -252,6 +252,19 @@ test("'The Issue' cannot be re-filed", async () => {
   const body = await res.json();
   assert.equal(body.result.isError, true);
   assert.match(body.result.content[0].text, /considered resolved/);
+  assert.equal(charges.length, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 0);
+  restore();
+});
+
+test('a read-only token cannot see or call write tools; nothing is charged', async () => {
+  const { db, env, charges, restore } = setup('u1', { scopes: ['read'] });
+  const list = await handleMcp(post(rpc(1, 'tools/list'), auth), env);
+  assert.deepEqual((await list.json()).result.tools.map(t => t.name), ['list_repos', 'list_requests']);
+  const res = await handleMcp(post(rpc(2, 'tools/call', { name: 'create_issue', arguments: { owner: 'ingo', repo: 'portal', title: 'Sneaky' } }), { ...auth, ...key }), env);
+  const body = await res.json();
+  assert.equal(body.error.code, -32602);
+  assert.match(body.error.message, /write scope/);
   assert.equal(charges.length, 0);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 0);
   restore();
