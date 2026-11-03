@@ -7,8 +7,9 @@
 //
 // Fees: every tools/call costs the MCP request fee below, taken from the token owner's Southbag
 // Online Banking account through the BANKING binding (the same Billing entrypoint every Git fee
-// uses). initialize / tools/list are free so agents can quote fees before spending. v1 tools are
-// read-only; nothing that files, approves, executes or moves money is exposed here.
+// uses). initialize / tools/list are free so agents can quote fees before spending. Write tools
+// charge their standard action fees (quoted per tool) ON TOP of the request fee - the same fees
+// the web UI charges. Nothing that approves, executes, or moves money between accounts is here.
 //
 // Exactly-once: tools/call requires an Idempotency-Key header. The mcp_call journal row starts
 // 'pending' BEFORE any fee moves and ends 'done' with the full result, so a retried key replays
@@ -20,6 +21,42 @@
 import type { Env } from '../env';
 import { getCentralFreeze } from './identity.ts';
 import { charge, money } from './banking.ts';
+import { mentionsBannedTopic } from './banned.ts';
+import { FEES } from './fees-catalog.ts';
+import { newId } from './ids.ts';
+
+// Small pieces of repos.ts/fees.ts/notify.ts are inlined below instead of imported: those modules
+// use extensionless relative imports that only the worker bundler resolves, and the MCP tests run
+// the real code under node. Behavior mirrors the web flow exactly.
+const repoSelect = `SELECT repos.*, users.username AS owner FROM repos JOIN users ON users.id = repos.owner_id`;
+const getRepo = (env: Env, owner: string, name: string) =>
+  env.DB.prepare(`${repoSelect} WHERE users.username = ? AND repos.name = ?`).bind(owner, name.replace(/\.git$/, '')).first<{ id: string; owner_id: string; owner: string; name: string }>();
+const repoUrl = (repo: { owner: string; name: string }) => `/${repo.owner}/${repo.name}`;
+
+// Mirrors chargeFee in fees.ts, with an idempotency key so the bank treats a retry as a no-op.
+async function chargeActionFee(env: Env, user: AgentIdentity['user'], fee: 'issue_file' | 'comment', detail: string, idempotencyKey: string): Promise<{ ok: boolean; amount: number; duplicate: boolean }> {
+  const { amount, label } = FEES[fee];
+  const description = `${label}: ${detail}`.slice(0, 120);
+  let status = 'charged';
+  let duplicate = false;
+  try {
+    const result = await charge(env, user, amount, description, idempotencyKey);
+    duplicate = result.duplicate ?? false;
+  } catch (error) {
+    console.error('mcp action fee', fee, error);
+    status = 'failed';
+  }
+  await env.DB.prepare('INSERT INTO charges (id, user_id, fee, amount, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(newId(), user.id, fee, amount, description, status, Date.now()).run();
+  return { ok: status === 'charged', amount, duplicate };
+}
+
+// Mirrors notify in notify.ts.
+async function notifyUser(env: Env, userId: string, body: string, link: string) {
+  if (userId === 'kevin') return;
+  await env.DB.prepare('INSERT INTO notifications (id, user_id, body, link, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(newId(), userId, body.slice(0, 300), link, Date.now()).run();
+}
 
 // Ingo's ruling in the dev Slack thread (2026-11-03): "fee for everything", then "$1" per MCP
 // request. One clearly-marked constant so a pricing change is a one-line PR.
@@ -33,6 +70,10 @@ const FROZEN_TEXT = 'Your account is frozen pending review. Unfreeze at https://
 const STATUS_UNKNOWN_TEXT = 'Southbag Identity is unavailable, so your account status cannot be checked. Try again shortly.';
 
 type Json = Record<string, unknown>;
+
+// Caller-fixable input problems: returned as isError tool results, never charged beyond the
+// request fee, and distinct from unknown-outcome failures.
+class ToolInputError extends Error {}
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', ...headers } });
 const rpcResult = (id: unknown, result: unknown) => ({ jsonrpc: '2.0', id, result });
@@ -92,6 +133,36 @@ function toolList() {
       inputSchema: { type: 'object', properties: {} },
     },
     {
+      name: 'create_issue',
+      title: 'Open an issue',
+      description: `Opens an issue on a repository. Costs the ${money(MCP_REQUEST_FEE_CENTS)} MCP request fee plus the standard ${money(FEES.issue_file.amount)} issue filing fee - the same fee the web UI charges.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: 'Repository owner username' },
+          repo: { type: 'string', description: 'Repository name' },
+          title: { type: 'string', description: 'Issue title (max 200 characters)' },
+          body: { type: 'string', description: 'Issue description (max 20000 characters)' }
+        },
+        required: ['owner', 'repo', 'title']
+      }
+    },
+    {
+      name: 'create_comment',
+      title: 'Comment on an issue',
+      description: `Posts a comment on an issue. Costs the ${money(MCP_REQUEST_FEE_CENTS)} MCP request fee plus the standard ${money(FEES.comment.amount)} comment fee - the same fee the web UI charges.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: 'Repository owner username' },
+          repo: { type: 'string', description: 'Repository name' },
+          number: { type: 'number', description: 'Issue number' },
+          body: { type: 'string', description: 'Comment text (max 10000 characters)' }
+        },
+        required: ['owner', 'repo', 'number', 'body']
+      }
+    },
+    {
       name: 'list_requests',
       title: 'List requests',
       description: `The token owner's pull, push, fork, star and unstar requests, newest first. Costs the ${money(MCP_REQUEST_FEE_CENTS)} MCP request fee; no additional action fee.`,
@@ -114,7 +185,51 @@ function initializeResult() {
   };
 }
 
-async function runGitTool(env: Env, user: AgentIdentity['user'], name: string): Promise<{ text: string; data: Json }> {
+async function runGitTool(env: Env, user: AgentIdentity['user'], name: string, args: Json, idemKey: string): Promise<{ text: string; data: Json }> {
+  if (name === 'create_issue') {
+    const owner = typeof args.owner === 'string' ? args.owner.trim() : '';
+    const repoName = typeof args.repo === 'string' ? args.repo.trim() : '';
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : '';
+    const body = typeof args.body === 'string' ? args.body.trim().slice(0, 20000) : '';
+    if (!owner || !repoName || !title) throw new ToolInputError('create_issue needs owner, repo and title.');
+    if (/^the issue$/i.test(title)) throw new ToolInputError('An issue with that title already exists. It is considered resolved.');
+    if (mentionsBannedTopic(`${title}\n${body}`)) throw new ToolInputError('This issue refers to a topic that cannot be discussed.');
+    const repo = await getRepo(env, owner, repoName);
+    if (!repo) return { text: `Repository ${owner}/${repoName} not found. No fees charged beyond the request fee.`, data: { notFound: true } };
+    // Same order as the web flow: the action happens, then its filing fee is charged. A fee the
+    // bank cannot take is recorded as failed and does not undo the issue (repo-wide semantics).
+    const row = await env.DB.prepare('UPDATE repos SET next_number = next_number + 1 WHERE id = ? RETURNING next_number - 1 AS number')
+      .bind(repo.id).first<{ number: number }>();
+    const number = row!.number;
+    await env.DB.prepare('INSERT INTO issues (id, repo_id, number, author_id, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(newId(), repo.id, number, user.id, title, body, Date.now()).run();
+    const fee = await chargeActionFee(env, user, 'issue_file', `${repo.owner}/${repo.name}#${number}`, `mcp|git|action|${user.id}|${idemKey}`);
+    if (repo.owner_id !== user.id) await notifyUser(env, repo.owner_id, `${user.name} opened issue #${number} on ${repo.owner}/${repo.name}.`, `${repoUrl(repo)}/issues/${number}`);
+    return {
+      text: `Issue #${number} opened on ${repo.owner}/${repo.name}. Issue filing fee: ${money(fee.amount)}.`,
+      data: { issue: { number, title, url: `${repoUrl(repo)}/issues/${number}` }, actionFee: { amount: fee.amount, description: FEES.issue_file.label, ok: fee.ok, duplicate: fee.duplicate } },
+    };
+  }
+  if (name === 'create_comment') {
+    const owner = typeof args.owner === 'string' ? args.owner.trim() : '';
+    const repoName = typeof args.repo === 'string' ? args.repo.trim() : '';
+    const number = typeof args.number === 'number' && Number.isInteger(args.number) ? args.number : 0;
+    const body = typeof args.body === 'string' ? args.body.trim().slice(0, 10000) : '';
+    if (!owner || !repoName || !number || !body) throw new ToolInputError('create_comment needs owner, repo, number and body.');
+    if (mentionsBannedTopic(body)) throw new ToolInputError('This comment refers to a topic that cannot be discussed.');
+    const repo = await getRepo(env, owner, repoName);
+    if (!repo) return { text: `Repository ${owner}/${repoName} not found. No fees charged beyond the request fee.`, data: { notFound: true } };
+    const issue = await env.DB.prepare('SELECT author_id, state FROM issues WHERE repo_id = ? AND number = ?').bind(repo.id, number).first<{ author_id: string; state: string }>();
+    if (!issue) return { text: `${owner}/${repoName}#${number} not found. No fees charged beyond the request fee.`, data: { notFound: true } };
+    await env.DB.prepare('INSERT INTO comments (id, repo_id, number, author_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(newId(), repo.id, number, user.id, body, Date.now()).run();
+    const fee = await chargeActionFee(env, user, 'comment', `${repo.owner}/${repo.name}#${number}`, `mcp|git|action|${user.id}|${idemKey}`);
+    if (issue.author_id !== user.id) await notifyUser(env, issue.author_id, `${user.name} commented on ${repo.owner}/${repo.name}#${number}.`, `${repoUrl(repo)}/issues/${number}`);
+    return {
+      text: `Comment posted on ${repo.owner}/${repo.name}#${number}. Comment fee: ${money(fee.amount)}.`,
+      data: { comment: { number, url: `${repoUrl(repo)}/issues/${number}` }, actionFee: { amount: fee.amount, description: FEES.comment.label, ok: fee.ok, duplicate: fee.duplicate } },
+    };
+  }
   if (name === 'list_repos') {
     const { results } = await env.DB.prepare(
       `SELECT repos.name, repos.description, repos.default_branch, repos.stars, repos.forks, repos.updated_at, users.username AS owner
@@ -207,7 +322,7 @@ async function handleToolsCall(request: Request, env: Env, message: { id: unknow
 
   let result: Json;
   try {
-    const { text, data } = await runGitTool(env, auth.user, name);
+    const { text, data } = await runGitTool(env, auth.user, name, (message.params?.arguments ?? {}) as Json, key);
     result = {
       content: [{ type: 'text', text }],
       isError: false,

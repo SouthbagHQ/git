@@ -102,7 +102,7 @@ test('tools/list is authenticated but free; tools quote the request fee', async 
   assert.equal((await handleMcp(post(rpc(1, 'tools/list')), env)).status, 401);
   const res = await handleMcp(post(rpc(2, 'tools/list'), auth), env);
   const body = await res.json();
-  assert.deepEqual(body.result.tools.map(t => t.name), ['list_repos', 'list_requests']);
+  assert.deepEqual(body.result.tools.map(t => t.name), ['list_repos', 'create_issue', 'create_comment', 'list_requests']);
   assert.match(body.result.tools[0].description, /\$1\.00/);
   assert.equal(charges.length, 0);
   restore();
@@ -187,5 +187,68 @@ test('a pending row is terminal: never re-run, never reclaimed, then replays onc
   const replay = await handleMcp(post(rpc(2, 'tools/call', { name: 'list_repos' }), { ...auth, ...key }), env);
   assert.equal((await replay.json()).result.structuredContent.receipt.duplicate, true);
   assert.equal(charges.length, 0);
+  restore();
+});
+
+test('create_issue opens the issue, charges $1 request fee + $0.50 filing fee, and replays safely', async () => {
+  const { db, env, charges, restore } = setup('u1');
+  const args = { owner: 'ingo', repo: 'portal', title: 'Portal is too round', body: 'It just is.' };
+  const res = await handleMcp(post(rpc(1, 'tools/call', { name: 'create_issue', arguments: args }), { ...auth, ...key }), env);
+  const body = await res.json();
+  assert.equal(body.result.isError, false);
+  assert.equal(body.result.structuredContent.issue.number, 2);
+  assert.equal(body.result.structuredContent.issue.url, '/ingo/portal/issues/2');
+  const actionFee = body.result.structuredContent.actionFee;
+  assert.equal(actionFee.amount, 50);
+  assert.equal(actionFee.ok, true);
+  // Two bank charges: the request fee and the filing fee, each with its own idempotency key.
+  assert.equal(charges.length, 2);
+  assert.equal(charges[0].idempotencyKey, 'mcp|git|request|u1|test-key-0001');
+  assert.equal(charges[1].idempotencyKey, 'mcp|git|action|u1|test-key-0001');
+  assert.equal(charges[1].amount, 50);
+  // A retry replays: no second issue, no new charges.
+  const res2 = await handleMcp(post(rpc(2, 'tools/call', { name: 'create_issue', arguments: args }), { ...auth, ...key }), env);
+  const body2 = await res2.json();
+  assert.equal(body2.result.structuredContent.receipt.duplicate, true);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 1);
+  assert.equal(charges.length, 2);
+  restore();
+});
+
+test('create_comment posts the comment and charges the $0.10 comment fee', async () => {
+  const { db, env, charges, restore } = setup('u1');
+  db.prepare("INSERT INTO issues (id, repo_id, number, author_id, title, body, created_at) VALUES ('i9', 'r1', 5, 'u1', 'Roundness', '', 1)").run();
+  const res = await handleMcp(post(rpc(1, 'tools/call', { name: 'create_comment', arguments: { owner: 'ingo', repo: 'portal', number: 5, body: 'Seconded.' } }), { ...auth, ...key }), env);
+  const body = await res.json();
+  assert.equal(body.result.isError, false);
+  assert.equal(body.result.structuredContent.actionFee.amount, 10);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM comments').get().n, 1);
+  assert.equal(charges.length, 2);
+  restore();
+});
+
+test('write tools reject bad input after the request fee only; unknown repo charges no action fee', async () => {
+  const { db, env, charges, restore } = setup('u1');
+  const bad = await handleMcp(post(rpc(1, 'tools/call', { name: 'create_issue', arguments: { owner: 'ingo', repo: 'portal' } }), { ...auth, ...key }), env);
+  const badBody = await bad.json();
+  assert.equal(badBody.result.isError, true);
+  assert.match(badBody.result.content[0].text, /needs owner, repo and title/);
+  assert.equal(charges.length, 1); // request fee only
+  assert.equal(journal(db)[0].status, 'done'); // terminal: caller bug is a completed answer, never re-run
+  const missing = await handleMcp(post(rpc(2, 'tools/call', { name: 'create_issue', arguments: { owner: 'ingo', repo: 'nope', title: 'Where' } }), { ...auth, 'idempotency-key': 'test-key-0002' }), env);
+  const missingBody = await missing.json();
+  assert.equal(missingBody.result.structuredContent.notFound, true);
+  assert.equal(charges.length, 2); // still request fee only
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 0);
+  restore();
+});
+
+test("'The Issue' cannot be re-filed", async () => {
+  const { db, env, charges, restore } = setup('u1');
+  const res = await handleMcp(post(rpc(1, 'tools/call', { name: 'create_issue', arguments: { owner: 'ingo', repo: 'portal', title: 'The Issue' } }), { ...auth, ...key }), env);
+  const body = await res.json();
+  assert.equal(body.result.isError, true);
+  assert.match(body.result.content[0].text, /considered resolved/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM issues').get().n, 0);
   restore();
 });
