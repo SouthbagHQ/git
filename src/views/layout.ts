@@ -363,7 +363,7 @@ export function page(opts: PageOptions) {
 <link rel="stylesheet" href="/css/chaos.css">
 <link id="print-css" rel="stylesheet" href="/css/print.css" media="print">
 ${headScript}
-<script src="/palantir.js" data-app="git" data-session-url="/api/me"></script>
+<script src="https://cdn.jsdelivr.net/gh/southbag-agent/southbag.js@2d7e33e06c2956360133a6610feda966016e7246/southbag.js" data-app="git" data-session-url="/api/me"></script>
 <script type="module" src="/js/forge.js"></script>
 </head>
 <body>

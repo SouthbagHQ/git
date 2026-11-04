@@ -13,7 +13,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     // Pages are rendered by the Worker (like Forgejo). Only /css, /js and /img are static.
-    "run_worker_first": ["/*", "!/css/*", "!/js/*", "!/img/*", "!/palantir.js"]
+    "run_worker_first": ["/*", "!/css/*", "!/js/*", "!/img/*"]
   },
   // Repositories, git objects, requests, fees and fraud cases all live in one D1 database.
   "d1_databases": [

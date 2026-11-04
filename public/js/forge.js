@@ -10,7 +10,7 @@
 //   <details class="menu-details"> … <input data-filter> … </details>        menus close when you click away; filter narrows links
 //   <button data-theme-toggle>Theme</button>                                  light/dark
 
-import { capitaliseKevin, toggleTheme } from './gags.js';
+import { toggleTheme } from './gags.js';
 import { cookieConsent, jank, siteJump } from './chaos.js';
 import { copy, dialog, refuseDelete, toast } from './ui.js';
 
@@ -115,7 +115,6 @@ function showFlash() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 function boot() {
-  capitaliseKevin();
   siteJump();
   jank();
   cookieConsent();
