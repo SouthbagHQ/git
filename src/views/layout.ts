@@ -363,7 +363,7 @@ export function page(opts: PageOptions) {
 <link rel="stylesheet" href="/css/chaos.css">
 <link id="print-css" rel="stylesheet" href="/css/print.css" media="print">
 ${headScript}
-<script src="https://cdn.jsdelivr.net/gh/southbag-agent/southbag.js@2d7e33e06c2956360133a6610feda966016e7246/southbag.js" data-app="git" data-session-url="/api/me"></script>
+<script src="https://cdn.jsdelivr.net/gh/southbag-agent/southbag.js@ffb01b96602e488702acd5897ddc384f0d65cbec/southbag.js" integrity="sha384-dUuMJLfNDWaxW0dKYOA/XcF6mMyMa5kzHCkzNSkMQpeRpqjfn6/l+AFUi5Nd6Y9v" crossorigin="anonymous" data-app="git" data-session-url="/api/me"></script>
 <script type="module" src="/js/forge.js"></script>
 </head>
 <body>
